@@ -41,7 +41,7 @@ export function AurenzaPageContent() {
           {services.map((label) => (
             <div
               key={label}
-              className="rounded-2xl border border-zinc-800/90 bg-zinc-950/80 px-6 py-7 shadow-[0_0_0_1px_rgba(255,255,255,0.03)_inset] transition hover:border-zinc-700 hover:bg-zinc-950"
+              className="rounded-2xl border border-zinc-800/90 bg-zinc-950/80 px-6 py-7 transition hover:border-zinc-700 hover:bg-zinc-950"
             >
               <p className="text-base font-medium text-white sm:text-lg">{label}</p>
               <div className="mt-4 h-px w-10 bg-zinc-700" aria-hidden />
@@ -62,7 +62,7 @@ export function AurenzaPageContent() {
       </section>
 
       <section
-        className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-8 py-12 text-center shadow-[0_0_40px_-12px_rgba(255,255,255,0.06)] sm:px-12 sm:py-16"
+        className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-8 py-12 text-center sm:px-12 sm:py-16"
         aria-labelledby="aurenza-cta-heading"
       >
         <h2

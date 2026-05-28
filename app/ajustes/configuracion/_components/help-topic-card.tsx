@@ -8,7 +8,7 @@ type HelpTopicCardProps = {
 
 export function HelpTopicCard({ icon, title, description }: HelpTopicCardProps) {
   return (
-    <article className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:border-zinc-300 hover:shadow">
+    <article className="rounded-xl border border-zinc-200 bg-white p-4 transition hover:border-zinc-300">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <span aria-hidden className="text-xl">

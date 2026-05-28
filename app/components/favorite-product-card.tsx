@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { VerifiedBadge } from "@/app/components/verified-badge";
+import { ProductCardImage } from "@/app/components/product/product-card-image";
+import { isFeaturedListing } from "@/src/lib/featured-listings";
 import { formatArsPrice } from "@/src/lib/money";
 import { formatProductCondition } from "@/src/lib/product-condition";
 import type { Product } from "@/src/types/product";
@@ -12,38 +15,17 @@ type FavoriteProductCardProps = {
 
 export function FavoriteProductCard({ product, onRemoveFavorite }: FavoriteProductCardProps) {
   const href = `/producto/${encodeURIComponent(product.id)}`;
+  const primaryImage = product.images?.[0];
+  const featured = isFeaturedListing(product);
 
   return (
-    <article className="group relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm transition hover:border-[#822020]/25 hover:shadow-md">
+    <article className="group relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-zinc-200/90 bg-white transition hover:border-[#822020]/25">
       <Link
         href={href}
         className="flex min-h-0 flex-1 flex-col focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#822020]"
         aria-label={`Ver publicación: ${product.title}`}
       >
-        <div className="relative aspect-square w-full bg-zinc-100">
-          {product.images[0] ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={product.images[0]} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <div
-              className="flex h-full w-full items-center justify-center bg-gradient-to-br from-zinc-100 to-zinc-200/90 text-zinc-400"
-              aria-hidden
-            >
-              <svg
-                viewBox="0 0 24 24"
-                className="h-14 w-14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                aria-hidden
-              >
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 15l-3.086-3.086a2 2 0 00-2.828 0L6 21" />
-              </svg>
-            </div>
-          )}
-        </div>
+        <ProductCardImage src={primaryImage} featured={featured} />
 
         <div className="flex flex-1 flex-col gap-2 p-3 sm:p-4">
           <h3 className="line-clamp-2 min-h-10 text-sm font-medium leading-snug text-zinc-900 sm:min-h-0 sm:text-base">
@@ -62,6 +44,7 @@ export function FavoriteProductCard({ product, onRemoveFavorite }: FavoriteProdu
             >
               {formatProductCondition(product)}
             </span>
+            {featured ? <VerifiedBadge verified size="sm" /> : null}
           </div>
           <div className="mt-auto flex flex-col gap-1 border-t border-zinc-100 pt-2">
             <div className="flex flex-wrap items-baseline gap-2">
@@ -82,7 +65,7 @@ export function FavoriteProductCard({ product, onRemoveFavorite }: FavoriteProdu
           e.stopPropagation();
           onRemoveFavorite(product.id);
         }}
-        className="absolute right-2 top-2 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-[#822020] shadow-md backdrop-blur-sm transition hover:bg-white hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#822020]"
+        className="absolute right-2 top-2 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-[#822020] backdrop-blur-sm transition hover:bg-white hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#822020]"
         aria-label="Quitar de favoritos"
       >
         <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor" aria-hidden>

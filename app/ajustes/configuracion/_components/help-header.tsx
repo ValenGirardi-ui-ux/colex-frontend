@@ -23,7 +23,7 @@ function SearchIcon() {
 
 export function HelpHeader({ query, onQueryChange, totalMatches }: HelpHeaderProps) {
   return (
-    <header className="rounded-2xl border border-zinc-200 bg-zinc-50/80 p-4 shadow-sm sm:p-6">
+    <header className="rounded-2xl border border-zinc-200 bg-zinc-50/80 p-4 sm:p-6">
       <div className="space-y-5">
         <div className="space-y-2">
           <h2 className="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">

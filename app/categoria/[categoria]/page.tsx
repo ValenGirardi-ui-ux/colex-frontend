@@ -1,46 +1,35 @@
-import { SiteHeader } from "@/app/components/site-header";
-import { HomeProductCard } from "@/app/components/home/home-product-card";
-import { getProductsByCategory } from "@/src/services/products";
+import { redirect } from "next/navigation";
+import { buildCatalogSearchParams } from "@/src/lib/product-filters";
+import type { MainFilterId } from "@/src/data/product-filters";
 
 type PageProps = {
   params: Promise<{ categoria: string }>;
 };
 
-function categoryLabel(slug: string): string {
-  if (!slug) return "Categoría";
-  return slug.charAt(0).toUpperCase() + slug.slice(1);
-}
+const LEGACY_SLUG_MAP: Record<string, { main: MainFilterId; sub?: string }> = {
+  arte: { main: "arte" },
+  ropa: { main: "uniformes", sub: "indumentaria" },
+  uniformes: { main: "uniformes" },
+  accesorios: { main: "otros", sub: "accesorios" },
+  tecnologia: { main: "tecnologia" },
+  deporte: { main: "otros" },
+  libro: { main: "libros" },
+  libros: { main: "libros" },
+  utiles: { main: "utiles" },
+  mochilas: { main: "mochilas" },
+  guardapolvos: { main: "uniformes", sub: "guardapolvos" },
+  calzado: { main: "uniformes", sub: "calzado" },
+  otros: { main: "otros" },
+};
 
 export default async function CategoriaPage({ params }: PageProps) {
   const { categoria } = await params;
-  const products = await getProductsByCategory(categoria);
-
-  return (
-    <div className="min-h-screen bg-[#F6F6F6] text-zinc-900">
-      <SiteHeader />
-      <main className="mx-auto w-full max-w-[1240px] px-4 py-6 lg:px-6 lg:py-8">
-        <section className="mb-6 rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm sm:p-6">
-          <h1 className="text-3xl font-semibold tracking-tight text-[#822020] sm:text-4xl">
-            Categoría: {categoryLabel(categoria)}
-          </h1>
-          <p className="mt-2 text-sm text-zinc-600 sm:text-base">
-            Explorá artículos relacionados con esta categoría en Colex.
-          </p>
-        </section>
-
-        <section>
-          <div className="mb-4 text-sm text-zinc-600 sm:text-base">
-            {products.length} {products.length === 1 ? "artículo" : "artículos"}
-          </div>
-          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {products.map((product) => (
-              <li key={product.id}>
-                <HomeProductCard product={product} />
-              </li>
-            ))}
-          </ul>
-        </section>
-      </main>
-    </div>
-  );
+  const slug = categoria.trim().toLowerCase();
+  const mapped = LEGACY_SLUG_MAP[slug] ?? { main: "todo" as const };
+  const sp = buildCatalogSearchParams({
+    main: mapped.main,
+    sub: mapped.sub ?? "todo",
+    query: "",
+  });
+  redirect(sp.toString() ? `/buscar?${sp.toString()}` : "/buscar");
 }

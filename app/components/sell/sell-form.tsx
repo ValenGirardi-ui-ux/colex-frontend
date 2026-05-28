@@ -1,7 +1,28 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { SELL_CATEGORIES } from "@/src/data/categories";
+import {
+  normalizeSellDeliveryForForm,
+  parseDeliveryMethodForPublish,
+  SELL_DELIVERY_OPTIONS,
+} from "@/src/lib/delivery-method";
+import {
+  clearLocalSellDraft,
+  dataUrlToFile,
+  fileToDataUrl,
+  readLocalSellDraft,
+  writeLocalSellDraft,
+  type SellDraftPhotoStored,
+  type SellDraftSnapshot,
+} from "@/src/lib/sell-draft";
+import { supabase } from "@/src/lib/supabase/client";
+import { publishExistingDraft, saveProductDraft } from "@/src/services/product-drafts";
+import { getOwnProductById } from "@/src/services/products";
+import { updatePublishedListing } from "@/src/services/listing-management";
+import { publishProduct } from "@/src/services/publish-product";
 import type { ProductCondition, ProductNewCondition, ProductUsedCondition, SellDeliveryMethod } from "@/src/types/product";
 
 type PhotoItem = {
@@ -27,6 +48,7 @@ const inputClass =
   "w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-[#822020] focus:ring-2 focus:ring-[#822020]/20 sm:py-3.5 sm:text-base";
 const labelClass = "text-sm font-medium text-zinc-800";
 const errorTextClass = "text-sm text-red-600";
+const AUTOSAVE_MS = 1400;
 
 function parsePriceToPositiveInteger(raw: string): number | null {
   const digits = raw.replace(/[^\d]/g, "");
@@ -36,10 +58,60 @@ function parsePriceToPositiveInteger(raw: string): number | null {
   return n;
 }
 
-export function SellForm() {
+function parsePriceDigits(raw: string): number {
+  const digits = raw.replace(/[^\d]/g, "");
+  if (!digits) return 0;
+  const n = parseInt(digits, 10);
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+function hasFormContent(fields: {
+  title: string;
+  description: string;
+  category: string;
+  condition: string;
+  price: string;
+  brand: string;
+  institution: string;
+  sizeLabel: string;
+  location: string;
+  delivery: string;
+  photoCount: number;
+  remoteCount: number;
+}): boolean {
+  return (
+    fields.title.trim().length > 0 ||
+    fields.description.trim().length > 0 ||
+    fields.category.length > 0 ||
+    fields.condition.length > 0 ||
+    fields.price.replace(/[^\d]/g, "").length > 0 ||
+    fields.brand.trim().length > 0 ||
+    fields.institution.trim().length > 0 ||
+    fields.sizeLabel.trim().length > 0 ||
+    fields.location.trim().length > 0 ||
+    fields.delivery.length > 0 ||
+    fields.photoCount > 0 ||
+    fields.remoteCount > 0
+  );
+}
+
+type SellFormProps = {
+  /** Editar publicación activa o pausada del vendedor. */
+  editProductId?: string;
+};
+
+export function SellForm({ editProductId }: SellFormProps = {}) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const isEditMode = Boolean(editProductId);
   const formId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [authReady, setAuthReady] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [remoteImageUrls, setRemoteImageUrls] = useState<string[]>([]);
+  const [draftLoadDone, setDraftLoadDone] = useState(false);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -48,14 +120,46 @@ export function SellForm() {
   const [newCondition, setNewCondition] = useState<ProductNewCondition | "">("");
   const [usedCondition, setUsedCondition] = useState<ProductUsedCondition | "">("");
   const [price, setPrice] = useState("");
+  const [brand, setBrand] = useState("");
   const [institution, setInstitution] = useState("");
   const [sizeLabel, setSizeLabel] = useState("");
   const [location, setLocation] = useState("");
-  const [delivery, setDelivery] = useState<SellDeliveryMethod | "">("");
+  const [delivery, setDelivery] = useState<SellDeliveryMethod | "">("ambos");
 
   const [errors, setErrors] = useState<FormErrors>({});
-  const [success, setSuccess] = useState(false);
-  const [draftHint, setDraftHint] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [draftNotice, setDraftNotice] = useState<string | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
+
+  const skipAutosaveRef = useRef(true);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftSaveInFlightRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSession() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (cancelled) return;
+      setUserId(session?.user?.id ?? null);
+      setAuthReady(true);
+    }
+
+    void loadSession();
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserId(session?.user?.id ?? null);
+      setAuthReady(true);
+    });
+
+    return () => {
+      cancelled = true;
+      data.subscription.unsubscribe();
+    };
+  }, []);
 
   const photosRef = useRef(photos);
   photosRef.current = photos;
@@ -69,6 +173,412 @@ export function SellForm() {
   const revokeList = (items: PhotoItem[]) => {
     items.forEach((p) => URL.revokeObjectURL(p.previewUrl));
   };
+
+  const applySnapshot = useCallback(async (snapshot: SellDraftSnapshot, nextDraftId: string | null) => {
+    skipAutosaveRef.current = true;
+    setDraftId(nextDraftId);
+    setTitle(snapshot.title);
+    setDescription(snapshot.description);
+    setCategory(snapshot.category);
+    setCondition(snapshot.condition);
+    setNewCondition(snapshot.newCondition);
+    setUsedCondition(snapshot.usedCondition);
+    setPrice(snapshot.price);
+    setBrand(snapshot.brand);
+    setInstitution(snapshot.institution);
+    setSizeLabel(snapshot.sizeLabel);
+    setLocation(snapshot.location);
+    setDelivery(normalizeSellDeliveryForForm(snapshot.delivery) || "ambos");
+    setRemoteImageUrls(snapshot.imageUrls);
+
+    setPhotos((prev) => {
+      revokeList(prev);
+      return [];
+    });
+
+    if (snapshot.localPhotos.length > 0) {
+      const loaded: PhotoItem[] = [];
+      for (const stored of snapshot.localPhotos) {
+        try {
+          const file = await dataUrlToFile(stored.dataUrl, stored.name);
+          loaded.push({
+            id: stored.id,
+            file,
+            previewUrl: URL.createObjectURL(file),
+          });
+        } catch {
+          // omit corrupt photo
+        }
+      }
+      setPhotos(loaded);
+    }
+
+    window.setTimeout(() => {
+      skipAutosaveRef.current = false;
+    }, 0);
+  }, []);
+
+  useEffect(() => {
+    if (!authReady) return;
+
+    let cancelled = false;
+
+    async function loadDraft() {
+      skipAutosaveRef.current = true;
+
+      if (isEditMode && editProductId && userId) {
+        const product = await getOwnProductById(editProductId, userId);
+        if (cancelled) return;
+        if (
+          product &&
+          (product.status === "active" || product.status === "paused")
+        ) {
+          await applySnapshot(
+            {
+              version: 1,
+              id: product.id,
+              updatedAt: new Date().toISOString(),
+              title: product.title,
+              description: product.description ?? "",
+              category: product.category === "Otros" ? "" : product.category,
+              condition:
+                product.condition === "nuevo" || product.condition === "usado"
+                  ? product.condition
+                  : "",
+              newCondition: product.new_condition ?? "",
+              usedCondition: product.used_condition ?? "",
+              price: String(product.price),
+              brand: product.brand ?? "",
+              institution: product.institution ?? "",
+              sizeLabel: product.size ?? "",
+              location: product.location === "No indicada" ? "" : product.location,
+              delivery: product.delivery_method ?? "",
+              imageUrls: product.images ?? [],
+              localPhotos: [],
+            },
+            null,
+          );
+          setDraftLoadDone(true);
+          return;
+        }
+        setSubmitError("No encontramos esta publicación para editar.");
+        setDraftLoadDone(true);
+        return;
+      }
+
+      const borradorParam = searchParams.get("borrador");
+
+      if (userId && borradorParam) {
+        const product = await getOwnProductById(borradorParam, userId);
+        if (cancelled) return;
+        if (product && product.status === "draft") {
+          await applySnapshot(
+            {
+              version: 1,
+              id: product.id,
+              updatedAt: new Date().toISOString(),
+              title: product.title === "Sin título" ? "" : product.title,
+              description: product.description ?? "",
+              category: product.category === "Otros" ? "" : product.category,
+              condition:
+                product.condition === "nuevo" || product.condition === "usado" ? product.condition : "",
+              newCondition: product.new_condition ?? "",
+              usedCondition: product.used_condition ?? "",
+              price: product.price > 0 ? String(product.price) : "",
+              brand: product.brand ?? "",
+              institution: product.institution ?? "",
+              sizeLabel: product.size ?? "",
+              location: product.location === "No indicada" ? "" : product.location,
+              delivery: product.delivery_method ?? "",
+              imageUrls: product.images ?? [],
+              localPhotos: [],
+            },
+            product.id,
+          );
+          setDraftLoadDone(true);
+          return;
+        }
+      }
+
+      if (!userId) {
+        const local = readLocalSellDraft();
+        if (cancelled) return;
+        if (local) {
+          await applySnapshot(local, null);
+        } else {
+          skipAutosaveRef.current = false;
+        }
+        setDraftLoadDone(true);
+        return;
+      }
+
+      if (!borradorParam) {
+        const local = readLocalSellDraft();
+        if (cancelled) return;
+        if (local && hasFormContent({
+          title: local.title,
+          description: local.description,
+          category: local.category,
+          condition: local.condition,
+          price: local.price,
+          brand: local.brand,
+          institution: local.institution,
+          sizeLabel: local.sizeLabel,
+          location: local.location,
+          delivery: local.delivery,
+          photoCount: local.localPhotos.length,
+          remoteCount: local.imageUrls.length,
+        })) {
+          await applySnapshot(local, null);
+        } else {
+          skipAutosaveRef.current = false;
+        }
+      } else {
+        skipAutosaveRef.current = false;
+      }
+
+      setDraftLoadDone(true);
+    }
+
+    void loadDraft();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, userId, searchParams, applySnapshot, isEditMode, editProductId]);
+
+  const buildSnapshot = useCallback(async (): Promise<SellDraftSnapshot> => {
+    const localPhotos: SellDraftPhotoStored[] = [];
+    for (const p of photos) {
+      try {
+        const dataUrl = await fileToDataUrl(p.file);
+        localPhotos.push({ id: p.id, dataUrl, name: p.file.name || "foto.jpg" });
+      } catch {
+        // skip
+      }
+    }
+
+    return {
+      version: 1,
+      id: draftId ?? "local",
+      updatedAt: new Date().toISOString(),
+      title,
+      description,
+      category,
+      condition,
+      newCondition,
+      usedCondition,
+      price,
+      brand,
+      institution,
+      sizeLabel,
+      location,
+      delivery,
+      imageUrls: remoteImageUrls,
+      localPhotos,
+    };
+  }, [
+    brand,
+    category,
+    condition,
+    delivery,
+    description,
+    draftId,
+    institution,
+    location,
+    newCondition,
+    photos,
+    price,
+    remoteImageUrls,
+    sizeLabel,
+    title,
+    usedCondition,
+  ]);
+
+  const persistDraft = useCallback(
+    async (opts?: { silent?: boolean; requireAuth?: boolean }): Promise<boolean> => {
+      const silent = opts?.silent ?? false;
+      const requireAuth = opts?.requireAuth ?? false;
+
+      if (requireAuth && !userId) {
+        setDraftError("Iniciá sesión para guardar el borrador en tu cuenta.");
+        setDraftNotice(null);
+        return false;
+      }
+
+      if (draftSaveInFlightRef.current) {
+        return false;
+      }
+
+      const content = hasFormContent({
+        title,
+        description,
+        category,
+        condition,
+        price,
+        brand,
+        institution,
+        sizeLabel,
+        location,
+        delivery,
+        photoCount: photos.length,
+        remoteCount: remoteImageUrls.length,
+      });
+
+      if (!content) {
+        if (!silent) {
+          setDraftNotice(null);
+          setDraftError("Completá al menos un campo para guardar el borrador.");
+        }
+        return false;
+      }
+
+      if (!silent) {
+        setSavingDraft(true);
+        setDraftError(null);
+        setDraftNotice(null);
+      }
+
+      draftSaveInFlightRef.current = true;
+
+      try {
+        if (!userId) {
+          const snapshot = await buildSnapshot();
+          writeLocalSellDraft(snapshot);
+          if (!silent) {
+            setDraftNotice("Borrador guardado en este dispositivo. Iniciá sesión para sincronizarlo en tu cuenta.");
+            setDraftError(null);
+          }
+          return true;
+        }
+
+        const { product, error } = await saveProductDraft({
+          userId,
+          draftId,
+          title,
+          description,
+          category,
+          condition,
+          newCondition,
+          usedCondition,
+          price: parsePriceDigits(price),
+          brand: brand.trim() || null,
+          institution: institution.trim() || null,
+          size: sizeLabel.trim() || null,
+          location,
+          deliveryMethod: delivery ? parseDeliveryMethodForPublish(delivery) : null,
+          existingImageUrls: remoteImageUrls,
+          newImageFiles: photos.map((p) => p.file),
+        });
+
+        if (error || !product) {
+          if (!silent) {
+            setDraftError(error ?? "No se pudo guardar el borrador.");
+            setDraftNotice(null);
+          }
+          return false;
+        }
+
+        clearLocalSellDraft();
+        const previousDraftId = draftId;
+        setDraftId(product.id);
+        setRemoteImageUrls(product.images ?? []);
+        setPhotos((prev) => {
+          revokeList(prev);
+          return [];
+        });
+
+        if (!previousDraftId && product.id) {
+          router.replace(`/vender?borrador=${encodeURIComponent(product.id)}`, { scroll: false });
+        }
+
+        if (!silent) {
+          setDraftNotice(
+            "Borrador guardado correctamente en tu cuenta. Podés verlo en Perfil → Borradores.",
+          );
+          setDraftError(null);
+        }
+        return true;
+      } catch (err) {
+        console.error("[Colex vender] borrador", err);
+        if (!silent) {
+          setDraftError("Ocurrió un error al guardar el borrador.");
+          setDraftNotice(null);
+        }
+        return false;
+      } finally {
+        draftSaveInFlightRef.current = false;
+        if (!silent) setSavingDraft(false);
+      }
+    },
+    [
+      brand,
+      buildSnapshot,
+      category,
+      condition,
+      delivery,
+      description,
+      draftId,
+      institution,
+      location,
+      newCondition,
+      photos,
+      price,
+      remoteImageUrls,
+      router,
+      sizeLabel,
+      title,
+      usedCondition,
+      userId,
+    ],
+  );
+
+  useEffect(() => {
+    if (isEditMode || !draftLoadDone || skipAutosaveRef.current) return;
+
+    const content = hasFormContent({
+      title,
+      description,
+      category,
+      condition,
+      price,
+      brand,
+      institution,
+      sizeLabel,
+      location,
+      delivery,
+      photoCount: photos.length,
+      remoteCount: remoteImageUrls.length,
+    });
+    if (!content) return;
+
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      void persistDraft({ silent: true });
+    }, AUTOSAVE_MS);
+
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, [
+    draftLoadDone,
+    title,
+    description,
+    category,
+    condition,
+    newCondition,
+    usedCondition,
+    price,
+    brand,
+    institution,
+    sizeLabel,
+    location,
+    delivery,
+    photos,
+    remoteImageUrls,
+    persistDraft,
+    isEditMode,
+  ]);
 
   const addFiles = (fileList: FileList | null) => {
     if (!fileList?.length) return;
@@ -93,11 +603,17 @@ export function SellForm() {
     });
   };
 
+  const removeRemoteImage = (url: string) => {
+    setRemoteImageUrls((prev) => prev.filter((u) => u !== url));
+  };
+
   const resetForm = () => {
     setPhotos((prev) => {
       revokeList(prev);
       return [];
     });
+    setRemoteImageUrls([]);
+    setDraftId(null);
     setTitle("");
     setDescription("");
     setCategory("");
@@ -105,26 +621,30 @@ export function SellForm() {
     setNewCondition("");
     setUsedCondition("");
     setPrice("");
+    setBrand("");
     setInstitution("");
     setSizeLabel("");
     setLocation("");
-    setDelivery("");
+    setDelivery("ambos");
     setErrors({});
+    clearLocalSellDraft();
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const validate = (): boolean => {
     const e: FormErrors = {};
     if (!title.trim()) e.title = "Ingresá un título.";
-    if (!description.trim()) e.description = "Ingresá una descripción.";
-    if (!category) e.category = "Elegí una categoría.";
-    if (condition !== "nuevo" && condition !== "usado")
-      e.condition = "Elegí si el producto es nuevo o usado.";
-    if (condition === "nuevo" && newCondition !== "con_etiqueta" && newCondition !== "sin_etiqueta") {
+    if (!parsePriceToPositiveInteger(price)) e.price = "Ingresá un precio válido (solo números).";
+    if (photos.length === 0 && remoteImageUrls.length === 0) {
+      e.photos = "Agregá al menos una foto del producto.";
+    }
+
+    const cond = condition === "nuevo" ? "nuevo" : condition === "usado" ? "usado" : null;
+    if (cond === "nuevo" && newCondition !== "con_etiqueta" && newCondition !== "sin_etiqueta") {
       e.newCondition = "Indicá si el producto nuevo tiene etiqueta.";
     }
     if (
-      condition === "usado" &&
+      cond === "usado" &&
       usedCondition !== "casi_nuevo" &&
       usedCondition !== "algo_desgastado" &&
       usedCondition !== "bastante_desgastado" &&
@@ -132,66 +652,230 @@ export function SellForm() {
     ) {
       e.usedCondition = "Indicá el estado del producto usado.";
     }
-    if (!parsePriceToPositiveInteger(price)) e.price = "Ingresá un precio válido (solo números).";
-    if (!location.trim()) e.location = "Ingresá la ubicación o zona de entrega.";
-    if (photos.length === 0) e.photos = "Agregá al menos una foto del producto.";
-    if (delivery !== "retiro" && delivery !== "envio" && delivery !== "ambos")
-      e.delivery = "Elegí un método de entrega.";
 
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = (ev: FormEvent) => {
+  const handleSubmit = async (ev: FormEvent) => {
     ev.preventDefault();
-    setSuccess(false);
+    setSubmitError(null);
+
+    if (!userId) {
+      router.push("/login?next=%2Fvender");
+      return;
+    }
     if (!validate()) return;
-    setSuccess(true);
-    resetForm();
+
+    const priceValue = parsePriceToPositiveInteger(price);
+    if (!priceValue) return;
+
+    const resolvedCondition: ProductCondition = condition === "nuevo" ? "nuevo" : "usado";
+    const resolvedNew: ProductNewCondition | null =
+      resolvedCondition === "nuevo"
+        ? newCondition === "con_etiqueta" || newCondition === "sin_etiqueta"
+          ? newCondition
+          : "sin_etiqueta"
+        : null;
+    const resolvedUsed: ProductUsedCondition | null =
+      resolvedCondition === "usado"
+        ? usedCondition === "casi_nuevo" ||
+          usedCondition === "algo_desgastado" ||
+          usedCondition === "bastante_desgastado" ||
+          usedCondition === "roto"
+          ? usedCondition
+          : "algo_desgastado"
+        : null;
+
+    setPublishing(true);
+    try {
+      if (isEditMode && editProductId) {
+        const { product, error } = await updatePublishedListing(editProductId, userId, {
+          userId,
+          title,
+          description,
+          price: priceValue,
+          category: category || "Otros",
+          condition: resolvedCondition,
+          newCondition: resolvedNew,
+          usedCondition: resolvedUsed,
+          institution: institution || null,
+          brand: brand || null,
+          size: sizeLabel || null,
+          location: location || "No indicada",
+          deliveryMethod: parseDeliveryMethodForPublish(delivery),
+          imageFiles: photos.map((p) => p.file),
+          existingImageUrls: remoteImageUrls,
+        });
+
+        if (error || !product) {
+          setSubmitError(error ?? "No se pudieron guardar los cambios.");
+          return;
+        }
+
+        router.push("/perfil?tab=publicaciones");
+        return;
+      }
+
+      if (draftId) {
+        const { product, error } = await publishExistingDraft(draftId, userId, {
+          draftId,
+          userId,
+          title,
+          description,
+          category,
+          condition,
+          newCondition,
+          usedCondition,
+          price: priceValue,
+          brand: brand.trim() || null,
+          institution: institution.trim() || null,
+          size: sizeLabel.trim() || null,
+          location,
+          deliveryMethod: parseDeliveryMethodForPublish(delivery),
+          existingImageUrls: remoteImageUrls,
+          newImageFiles: photos.map((p) => p.file),
+          imageFiles: photos.map((p) => p.file),
+        });
+
+        if (error || !product) {
+          setSubmitError(error ?? "No se pudo publicar el producto.");
+          return;
+        }
+
+        resetForm();
+        router.push(`/producto/${encodeURIComponent(product.id)}?publicado=1`);
+        return;
+      }
+
+      const { product, error } = await publishProduct({
+        userId,
+        title,
+        description,
+        price: priceValue,
+        category: category || "Otros",
+        condition: resolvedCondition,
+        newCondition: resolvedNew,
+        usedCondition: resolvedUsed,
+        institution: institution || null,
+        brand: brand || null,
+        size: sizeLabel || null,
+        location: location || "No indicada",
+        deliveryMethod: parseDeliveryMethodForPublish(delivery),
+        imageFiles: photos.map((p) => p.file),
+      });
+
+      if (error || !product) {
+        setSubmitError(error ?? "No se pudo publicar el producto.");
+        return;
+      }
+
+      resetForm();
+      router.push(`/producto/${encodeURIComponent(product.id)}?publicado=1`);
+    } catch (err) {
+      console.error("[Colex vender] publicar", err);
+      setSubmitError("Ocurrió un error inesperado. Intentá de nuevo.");
+    } finally {
+      setPublishing(false);
+    }
   };
 
   const handleDraft = () => {
-    setDraftHint(true);
-    window.setTimeout(() => setDraftHint(false), 4000);
+    if (!userId) {
+      setDraftNotice(null);
+      setDraftError("Iniciá sesión para guardar el borrador en tu cuenta.");
+      router.push("/login?next=%2Fvender");
+      return;
+    }
+    void persistDraft({ silent: false, requireAuth: true });
   };
+
+  if (!authReady || !draftLoadDone) {
+    return (
+      <p className="rounded-2xl border border-zinc-200 bg-white px-4 py-8 text-center text-sm text-zinc-600">
+        {authReady
+          ? isEditMode
+            ? "Cargando publicación…"
+            : "Cargando borrador…"
+          : "Comprobando sesión…"}
+      </p>
+    );
+  }
+
+  if (isEditMode && !userId) {
+    return (
+      <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-6 text-center text-sm text-zinc-600">
+        <p>Iniciá sesión para editar tu publicación.</p>
+        <Link
+          href={`/login?next=${encodeURIComponent(`/vender/editar/${editProductId}`)}`}
+          className="mt-3 inline-block font-semibold text-[#822020] hover:underline"
+        >
+          Iniciar sesión
+        </Link>
+      </div>
+    );
+  }
+
+  const totalImages = photos.length + remoteImageUrls.length;
 
   return (
     <form
       noValidate
-      onSubmit={handleSubmit}
+      onSubmit={(ev) => void handleSubmit(ev)}
       className="mx-auto w-full max-w-3xl space-y-6 pb-10 sm:space-y-8"
     >
-      {success && (
-        <div
-          role="status"
-          className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 sm:px-5 sm:text-base"
-        >
-          Tu producto fue preparado correctamente.
+      {!userId ? (
+        <div className="rounded-2xl border border-[#822020]/20 bg-[#822020]/[0.06] px-4 py-3 text-sm text-zinc-700 sm:px-5">
+          <p>
+            Podés completar y guardar un borrador en este dispositivo.{" "}
+            <Link href="/login?next=%2Fvender" className="font-semibold text-[#822020] underline-offset-2 hover:underline">
+              Iniciá sesión
+            </Link>{" "}
+            para sincronizar borradores en tu perfil y publicar.
+          </p>
         </div>
-      )}
-
-      {draftHint && (
+      ) : isEditMode ? (
         <p className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2 text-sm text-zinc-600">
-          Próximamente vas a poder guardar borradores. Por ahora es solo un botón de demostración.
+          Editando tu publicación. Los cambios se guardan al confirmar.
         </p>
-      )}
+      ) : draftId ? (
+        <p className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2 text-sm text-zinc-600">
+          Editando borrador guardado. Los cambios se guardan automáticamente.
+        </p>
+      ) : null}
 
-      {Object.keys(errors).length > 0 && !success && (
+      {submitError ? (
+        <p role="alert" className="rounded-2xl border border-[#822020]/25 bg-[#822020]/10 px-4 py-3 text-sm text-[#6d1b1b]">
+          {submitError}
+        </p>
+      ) : null}
+
+      {draftNotice ? (
+        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900">{draftNotice}</p>
+      ) : null}
+
+      {draftError ? (
+        <p role="alert" className="rounded-xl border border-[#822020]/25 bg-[#822020]/10 px-4 py-2 text-sm text-[#6d1b1b]">
+          {draftError}
+        </p>
+      ) : null}
+
+      {Object.keys(errors).length > 0 ? (
         <p className="text-sm text-red-600" role="alert">
           Revisá los campos marcados abajo.
         </p>
-      )}
+      ) : null}
 
       {/* Fotos */}
       <section
-        className="rounded-2xl border border-zinc-200/90 bg-white p-5 shadow-sm sm:p-7"
+        className="rounded-2xl border border-zinc-200/90 bg-white p-5 sm:p-7"
         aria-labelledby={`${formId}-photos`}
       >
         <h2 id={`${formId}-photos`} className="text-lg font-semibold text-zinc-900 sm:text-xl">
           Fotos del producto
         </h2>
         <p className="mt-1 text-sm text-zinc-500 sm:text-base">
-          Subí una o varias imágenes claras. Se guardan solo en tu dispositivo hasta publicar.
+          Subí al menos una imagen. Se publicarán en tu listado al confirmar.
         </p>
         {errors.photos && <p className={`${errorTextClass} mt-2`}>{errors.photos}</p>}
 
@@ -222,8 +906,22 @@ export function SellForm() {
             <span className="text-xs text-zinc-400 sm:text-sm">JPG, PNG o WEBP</span>
           </button>
 
-          {photos.length > 0 && (
+          {totalImages > 0 && (
             <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {remoteImageUrls.map((url) => (
+                <li key={url} className="group relative aspect-square overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt="" className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeRemoteImage(url)}
+                    className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-zinc-900/75 text-white transition hover:bg-red-600"
+                    aria-label="Quitar imagen"
+                  >
+                    <span className="text-lg leading-none">×</span>
+                  </button>
+                </li>
+              ))}
               {photos.map((p) => (
                 <li key={p.id} className="group relative aspect-square overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -231,7 +929,7 @@ export function SellForm() {
                   <button
                     type="button"
                     onClick={() => removePhoto(p.id)}
-                    className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-zinc-900/75 text-white shadow transition hover:bg-red-600"
+                    className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-zinc-900/75 text-white transition hover:bg-red-600"
                     aria-label="Quitar imagen"
                   >
                     <span className="text-lg leading-none">×</span>
@@ -245,7 +943,7 @@ export function SellForm() {
 
       {/* Básico */}
       <section
-        className="space-y-4 rounded-2xl border border-zinc-200/90 bg-white p-5 shadow-sm sm:space-y-5 sm:p-7"
+        className="space-y-4 rounded-2xl border border-zinc-200/90 bg-white p-5 sm:space-y-5 sm:p-7"
         aria-labelledby={`${formId}-basic`}
       >
         <h2 id={`${formId}-basic`} className="text-lg font-semibold text-zinc-900 sm:text-xl">
@@ -263,6 +961,7 @@ export function SellForm() {
             onChange={(e) => {
               setTitle(e.target.value);
               setErrors((x) => ({ ...x, title: undefined }));
+              setDraftNotice(null);
             }}
             placeholder="Ej. Mochila con ruedas, talle único"
           />
@@ -271,7 +970,7 @@ export function SellForm() {
 
         <div className="space-y-1.5">
           <label htmlFor={`${formId}-desc`} className={labelClass}>
-            Descripción
+            Descripción <span className="font-normal text-zinc-500">(opcional)</span>
           </label>
           <textarea
             id={`${formId}-desc`}
@@ -281,6 +980,7 @@ export function SellForm() {
             onChange={(e) => {
               setDescription(e.target.value);
               setErrors((x) => ({ ...x, description: undefined }));
+              setDraftNotice(null);
             }}
             placeholder="Contá el estado, medidas, marca, etc."
           />
@@ -289,7 +989,7 @@ export function SellForm() {
 
         <div className="space-y-1.5">
           <label htmlFor={`${formId}-cat`} className={labelClass}>
-            Categoría
+            Categoría <span className="font-normal text-zinc-500">(opcional)</span>
           </label>
           <select
             id={`${formId}-cat`}
@@ -298,6 +998,7 @@ export function SellForm() {
             onChange={(e) => {
               setCategory(e.target.value);
               setErrors((x) => ({ ...x, category: undefined }));
+              setDraftNotice(null);
             }}
             aria-invalid={!!errors.category}
           >
@@ -335,6 +1036,7 @@ export function SellForm() {
                   checked={condition === v}
                   onChange={() => {
                     setCondition(v);
+                    setDraftNotice(null);
                     setErrors((x) => ({ ...x, condition: undefined, newCondition: undefined, usedCondition: undefined }));
                     if (v === "usado") setNewCondition("");
                     if (v === "nuevo") setUsedCondition("");
@@ -367,6 +1069,7 @@ export function SellForm() {
                       checked={newCondition === v}
                       onChange={() => {
                         setNewCondition(v);
+                        setDraftNotice(null);
                         setErrors((x) => ({ ...x, newCondition: undefined }));
                       }}
                       className="h-4 w-4 border-zinc-300 text-[#822020] focus:ring-[#822020]/30"
@@ -401,6 +1104,7 @@ export function SellForm() {
                       checked={usedCondition === v}
                       onChange={() => {
                         setUsedCondition(v);
+                        setDraftNotice(null);
                         setErrors((x) => ({ ...x, usedCondition: undefined }));
                       }}
                       className="h-4 w-4 border-zinc-300 text-[#822020] focus:ring-[#822020]/30"
@@ -430,6 +1134,7 @@ export function SellForm() {
               onChange={(e) => {
                 setPrice(e.target.value);
                 setErrors((x) => ({ ...x, price: undefined }));
+                setDraftNotice(null);
               }}
               placeholder="Ej. 45000 o 12.500"
             />
@@ -440,12 +1145,28 @@ export function SellForm() {
 
       {/* Detalle y entrega */}
       <section
-        className="space-y-4 rounded-2xl border border-zinc-200/90 bg-white p-5 shadow-sm sm:space-y-5 sm:p-7"
+        className="space-y-4 rounded-2xl border border-zinc-200/90 bg-white p-5 sm:space-y-5 sm:p-7"
         aria-labelledby={`${formId}-extra`}
       >
         <h2 id={`${formId}-extra`} className="text-lg font-semibold text-zinc-900 sm:text-xl">
           Detalle y entrega
         </h2>
+
+        <div className="space-y-1.5">
+          <label htmlFor={`${formId}-brand`} className={labelClass}>
+            Marca <span className="font-normal text-zinc-500">(opcional)</span>
+          </label>
+          <input
+            id={`${formId}-brand`}
+            className={inputClass}
+            value={brand}
+            onChange={(e) => {
+              setBrand(e.target.value);
+              setDraftNotice(null);
+            }}
+            placeholder="Ej. Nike, Adidas, Topper…"
+          />
+        </div>
 
         <div className="space-y-1.5">
           <label htmlFor={`${formId}-inst`} className={labelClass}>
@@ -455,7 +1176,10 @@ export function SellForm() {
             id={`${formId}-inst`}
             className={inputClass}
             value={institution}
-            onChange={(e) => setInstitution(e.target.value)}
+            onChange={(e) => {
+              setInstitution(e.target.value);
+              setDraftNotice(null);
+            }}
             placeholder="Colegio al que aplica el artículo"
           />
         </div>
@@ -468,7 +1192,10 @@ export function SellForm() {
             id={`${formId}-size`}
             className={inputClass}
             value={sizeLabel}
-            onChange={(e) => setSizeLabel(e.target.value)}
+            onChange={(e) => {
+              setSizeLabel(e.target.value);
+              setDraftNotice(null);
+            }}
             placeholder="Ej. 14, M, único…"
           />
         </div>
@@ -484,6 +1211,7 @@ export function SellForm() {
             onChange={(e) => {
               setLocation(e.target.value);
               setErrors((x) => ({ ...x, location: undefined }));
+              setDraftNotice(null);
             }}
             placeholder="Barrio, ciudad o zona (ej. Belgrano, CABA)"
           />
@@ -493,13 +1221,7 @@ export function SellForm() {
         <fieldset>
           <legend className={`${labelClass} mb-2`}>Método de entrega</legend>
           <div className="space-y-2">
-            {(
-              [
-                { v: "retiro" as const, label: "Retiro en persona", sub: "Coordinás punto de encuentro" },
-                { v: "envio" as const, label: "Envío", sub: "Acordás envío con el comprador" },
-                { v: "ambos" as const, label: "Ambos", sub: "Retiro o envío, según lo acordado" },
-              ] as const
-            ).map(({ v, label, sub }) => (
+            {SELL_DELIVERY_OPTIONS.map(({ value: v, label, sub, recommended }) => (
               <label
                 key={v}
                 className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 sm:items-center ${
@@ -515,36 +1237,73 @@ export function SellForm() {
                   checked={delivery === v}
                   onChange={() => {
                     setDelivery(v);
+                    setDraftNotice(null);
                     setErrors((x) => ({ ...x, delivery: undefined }));
                   }}
                   className="mt-0.5 h-4 w-4 text-[#822020] focus:ring-[#822020]/30 sm:mt-0"
                 />
                 <span>
-                  <span className={`block text-sm font-medium sm:text-base ${delivery === v ? "text-[#822020]" : "text-zinc-900"}`}>
-                    {label}
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`text-sm font-medium sm:text-base ${delivery === v ? "text-[#822020]" : "text-zinc-900"}`}
+                    >
+                      {label}
+                    </span>
+                    {recommended ? (
+                      <span className="rounded-full bg-[#822020] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white sm:text-xs">
+                        Recomendado
+                      </span>
+                    ) : null}
                   </span>
-                  <span className="text-xs text-zinc-500 sm:text-sm">{sub}</span>
+                  <span className="mt-0.5 block text-xs text-zinc-500 sm:text-sm">{sub}</span>
                 </span>
               </label>
             ))}
           </div>
+          {delivery ? (
+            <p
+              role="status"
+              className="mt-3 rounded-xl border border-[#822020]/30 bg-[#822020]/[0.08] px-4 py-3 text-sm leading-relaxed text-[#822020] sm:text-base"
+            >
+              A pesar de elegir eso, tendrás que coordinar con el comprador.
+            </p>
+          ) : null}
           {errors.delivery && <p className={`${errorTextClass} mt-2`}>{errors.delivery}</p>}
         </fieldset>
       </section>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-end sm:gap-4">
-        <button
-          type="button"
-          onClick={handleDraft}
-          className="order-2 rounded-full border border-zinc-200 bg-white px-6 py-3 text-sm font-medium text-zinc-800 transition hover:border-zinc-300 hover:bg-zinc-50 sm:order-1 sm:px-8 sm:text-base"
-        >
-          Guardar borrador
-        </button>
+        {isEditMode ? (
+          <Link
+            href="/perfil?tab=publicaciones"
+            className="order-2 inline-flex items-center justify-center rounded-full border border-zinc-200 bg-white px-6 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 sm:order-1 sm:px-8 sm:text-base"
+          >
+            Cancelar
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={handleDraft}
+            disabled={savingDraft}
+            className="order-2 rounded-full border border-zinc-200 bg-white px-6 py-3 text-sm font-medium text-zinc-800 transition hover:border-zinc-300 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 sm:order-1 sm:px-8 sm:text-base"
+          >
+            {savingDraft ? "Guardando…" : "Guardar borrador"}
+          </button>
+        )}
         <button
           type="submit"
-          className="order-1 rounded-full bg-[#822020] px-6 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-[#6d1b1b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#822020] sm:order-2 sm:px-10 sm:text-base"
+          disabled={publishing}
+          className="order-1 rounded-full bg-[#822020] px-6 py-3 text-sm font-medium text-white transition hover:bg-[#6d1b1b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#822020] disabled:cursor-not-allowed disabled:opacity-60 sm:order-2 sm:px-10 sm:text-base"
         >
-          Publicar producto
+          {publishing
+            ? isEditMode
+              ? "Guardando…"
+              : "Publicando…"
+            : isEditMode
+              ? "Guardar cambios"
+              : userId
+                ? "Publicar producto"
+                : "Iniciar sesión para publicar"}
         </button>
       </div>
     </form>

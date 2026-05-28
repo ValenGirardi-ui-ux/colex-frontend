@@ -234,8 +234,10 @@ function toProduct(legacy: LegacyMockProduct): Product {
     used_condition:
       legacy.condition === "usado" ? legacy.usedCondition ?? USED_CONDITION_BY_ID[legacy.id] ?? "algo_desgastado" : null,
     institution: legacy.institution,
+    brand: null,
     location: legacy.location,
     size: legacy.size,
+    delivery_method: null,
     status: "active",
     created_at: legacy.publishedAt,
     images: legacy.imageUrl ? [legacy.imageUrl] : [],

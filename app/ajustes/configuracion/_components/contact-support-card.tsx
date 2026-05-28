@@ -1,6 +1,6 @@
 export function ContactSupportCard() {
   return (
-    <section className="rounded-2xl border border-[#0A8FA1]/25 bg-[#E8F5F7] p-5 shadow-sm sm:p-6">
+    <section className="rounded-2xl border border-[#0A8FA1]/25 bg-[#E8F5F7] p-5 sm:p-6">
       <div className="space-y-4">
         <div>
           <h3 className="text-xl font-semibold text-zinc-900">¿No encontraste lo que buscabas?</h3>

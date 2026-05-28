@@ -50,7 +50,7 @@ export default function ConocenosPage() {
           {steps.map((title) => (
             <div
               key={title}
-              className="flex min-h-[100px] items-center justify-center rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm transition hover:border-zinc-300 hover:shadow-md sm:min-h-[120px]"
+              className="flex min-h-[100px] items-center justify-center rounded-2xl border border-zinc-200 bg-white p-6 text-center transition hover:border-zinc-300 sm:min-h-[120px]"
             >
               <h3 className="text-lg font-semibold sm:text-xl" style={{ color: BRAND }}>
                 {title}
@@ -66,7 +66,7 @@ export default function ConocenosPage() {
           {reasons.map((title) => (
             <div
               key={title}
-              className="flex min-h-[96px] items-center justify-center rounded-2xl border border-zinc-200 bg-white p-5 text-center shadow-sm transition hover:border-zinc-300 hover:shadow-md"
+              className="flex min-h-[96px] items-center justify-center rounded-2xl border border-zinc-200 bg-white p-5 text-center transition hover:border-zinc-300"
             >
               <h3 className="text-base font-semibold text-zinc-900 sm:text-[17px]">{title}</h3>
             </div>

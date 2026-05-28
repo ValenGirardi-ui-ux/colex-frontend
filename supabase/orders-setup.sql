@@ -1,0 +1,66 @@
+-- Órdenes / compras (elección de entrega del comprador + totales)
+-- Ejecutar en Supabase → SQL Editor
+-- Para estados de compra/venta, aplicá también:
+-- supabase/migrations/20260515930000_order_status_states.sql
+
+create table if not exists public.orders (
+  id uuid primary key default gen_random_uuid(),
+  buyer_id uuid not null references auth.users (id) on delete cascade,
+  product_id text not null,
+  seller_id uuid references auth.users (id) on delete set null,
+  product_title text not null,
+  product_price integer not null check (product_price > 0),
+  buyer_delivery_method text not null check (
+    buyer_delivery_method in ('coordinar_vendedor', 'envio_domicilio')
+  ),
+  shipping_fee integer not null default 0 check (shipping_fee >= 0),
+  total_amount integer not null check (total_amount > 0),
+  status text not null default 'pendiente' check (
+    status in (
+      'pendiente',
+      'coordinando',
+      'pagado',
+      'enviado',
+      'entregado',
+      'cancelado'
+    )
+  ),
+  buyer_location_label text,
+  shipping_distance_km integer,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists orders_buyer_id_created_at_idx
+  on public.orders (buyer_id, created_at desc);
+
+create index if not exists orders_seller_id_created_at_idx
+  on public.orders (seller_id, created_at desc)
+  where seller_id is not null;
+
+alter table public.orders enable row level security;
+
+drop policy if exists "orders_select_own" on public.orders;
+drop policy if exists "orders_select_participant" on public.orders;
+drop policy if exists "orders_insert_own" on public.orders;
+drop policy if exists "orders_update_seller" on public.orders;
+drop policy if exists "orders_update_buyer_pay" on public.orders;
+
+create policy "orders_select_participant"
+  on public.orders for select to authenticated
+  using (auth.uid() = buyer_id or auth.uid() = seller_id);
+
+create policy "orders_insert_own"
+  on public.orders for insert to authenticated
+  with check (auth.uid() = buyer_id);
+
+create policy "orders_update_seller"
+  on public.orders for update to authenticated
+  using (auth.uid() = seller_id)
+  with check (auth.uid() = seller_id);
+
+create policy "orders_update_buyer_pay"
+  on public.orders for update to authenticated
+  using (auth.uid() = buyer_id and status = 'pendiente')
+  with check (auth.uid() = buyer_id and status = 'pagado');
+
+notify pgrst, 'reload schema';

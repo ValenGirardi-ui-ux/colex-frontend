@@ -1,76 +1,22 @@
-import { SiteHeader } from "../components/site-header";
+import { Suspense } from "react";
+import { SiteHeader } from "@/app/components/site-header";
+import { PerfilOwnClient } from "./perfil-own-client";
 
-import {
-
-  ProfileView,
-
-  parseProfileTab,
-
-  type ProfileTabKey,
-
-} from "../components/profile/profile-view";
-
-import { getMockProfileById, MOCK_CURRENT_USER_ID } from "@/src/data/mockProfiles";
-
-import { getProductsBySellerId, mockFavoriteProducts } from "@/src/data/mockProducts";
-
-
-
-type PerfilPageProps = {
-
-  searchParams: Promise<{ tab?: string }>;
-
-};
-
-
-
-export default async function PerfilPage({ searchParams }: PerfilPageProps) {
-
-  const params = await searchParams;
-
-  const activeTab: ProfileTabKey = parseProfileTab(params.tab);
-
-
-
-  const profileId = MOCK_CURRENT_USER_ID;
-
-  const profile = getMockProfileById(profileId)!;
-
-  const listings = getProductsBySellerId(profileId);
-
-
-
+function PerfilOwnFallback() {
   return (
-
     <div className="min-h-screen bg-[#FFFFFF] text-zinc-900">
-
       <SiteHeader />
-
-
-
-      <main>
-
-        <ProfileView
-
-          profile={profile}
-
-          listings={listings}
-
-          favorites={mockFavoriteProducts}
-
-          isOwnProfile
-
-          activeTab={activeTab}
-
-          basePath="/perfil"
-
-        />
-
+      <main className="mx-auto max-w-[1240px] px-4 py-16 text-center sm:px-6">
+        <p className="text-base text-zinc-600">Cargando…</p>
       </main>
-
     </div>
-
   );
-
 }
 
+export default function PerfilPage() {
+  return (
+    <Suspense fallback={<PerfilOwnFallback />}>
+      <PerfilOwnClient />
+    </Suspense>
+  );
+}

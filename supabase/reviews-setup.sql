@@ -1,0 +1,1 @@
+-- Reviews: ejecutar supabase/migrations/20260516300000_reviews.sql en el SQL Editor.

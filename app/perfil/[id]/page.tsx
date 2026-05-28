@@ -1,49 +1,45 @@
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { SiteHeader } from "@/app/components/site-header";
-import {
-  ProfileView,
-  parseProfileTab,
-  type ProfileTabKey,
-} from "@/app/components/profile/profile-view";
-import { getMockProfileById, MOCK_CURRENT_USER_ID } from "@/src/data/mockProfiles";
-import { getProductsBySellerId } from "@/src/data/mockProducts";
+import { MOCK_CURRENT_USER_ID } from "@/src/data/mockProfiles";
+import { PerfilPublicContent } from "./perfil-public-content";
 
 type PerfilUsuarioPageProps = {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ tab?: string }>;
 };
 
-export default async function PerfilUsuarioPage({ params, searchParams }: PerfilUsuarioPageProps) {
+function PerfilPublicFallback() {
+  return (
+    <div className="min-h-screen bg-[#FFFFFF] text-zinc-900">
+      <SiteHeader />
+      <main className="mx-auto max-w-[1240px] px-4 py-16 text-center sm:px-6">
+        <p className="text-base text-zinc-600" role="status">
+          Cargando perfil…
+        </p>
+      </main>
+    </div>
+  );
+}
+
+async function PerfilPublicPageInner({
+  params,
+  searchParams,
+}: PerfilUsuarioPageProps) {
   const { id } = await params;
   const q = await searchParams;
-  const activeTab: ProfileTabKey = parseProfileTab(q.tab);
 
   if (id === MOCK_CURRENT_USER_ID) {
     redirect("/perfil");
   }
 
-  const profile = getMockProfileById(id);
-  if (!profile) {
-    notFound();
-  }
+  return <PerfilPublicContent id={id} tab={q.tab} />;
+}
 
-  const listings = getProductsBySellerId(id);
-  const basePath = `/perfil/${encodeURIComponent(id)}`;
-
+export default function PerfilUsuarioPage(props: PerfilUsuarioPageProps) {
   return (
-    <div className="min-h-screen bg-[#FFFFFF] text-zinc-900">
-      <SiteHeader />
-
-      <main>
-        <ProfileView
-          profile={profile}
-          listings={listings}
-          favorites={[]}
-          isOwnProfile={false}
-          activeTab={activeTab}
-          basePath={basePath}
-        />
-      </main>
-    </div>
+    <Suspense fallback={<PerfilPublicFallback />}>
+      <PerfilPublicPageInner {...props} />
+    </Suspense>
   );
 }

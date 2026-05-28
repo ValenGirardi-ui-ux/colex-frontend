@@ -17,3 +17,268 @@ body {
   color: #171717;
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
+
+@media (max-width: 1023px) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
+}
+
+/* Contenedor estándar de páginas (mobile-first, sin overflow) */
+@layer components {
+  .colex-page {
+    @apply mx-auto w-full min-w-0 max-w-[1240px] px-4 py-4 max-lg:px-3 max-lg:py-4 lg:px-6 lg:py-8;
+  }
+
+  .colex-hscroll {
+    @apply flex overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch];
+    scrollbar-width: none;
+  }
+
+  .colex-hscroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .colex-card {
+    @apply min-w-0 overflow-hidden rounded-2xl border border-zinc-200/90 bg-white;
+  }
+
+  /* Mensajes: shell fijo + sidebar + panel chat (Chat y Ventas) */
+  .colex-messages-shell {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #f6f6f6;
+  }
+
+  @media (max-width: 1023px) {
+    .colex-messages-shell {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      bottom: calc(3.25rem + env(safe-area-inset-bottom, 0px));
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .colex-messages-shell {
+      position: relative;
+      z-index: auto;
+      height: calc(100vh - 5rem);
+      max-height: calc(100vh - 5rem);
+    }
+  }
+
+  .colex-messages-main {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .colex-messages-inbox {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .colex-messages-split {
+    display: flex;
+    flex: 1 1 0%;
+    min-height: 0;
+    min-width: 0;
+    gap: 0.75rem;
+    overflow: hidden;
+  }
+
+  @media (min-width: 1024px) {
+    .colex-messages-split {
+      flex-direction: row;
+      gap: 1rem;
+    }
+  }
+
+  .colex-messages-sidebar {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    border-radius: 1.5rem;
+    border: 1px solid rgb(228 228 231 / 0.7);
+    background: rgb(255 255 255 / 0.95);
+  }
+
+  @media (min-width: 1024px) {
+    .colex-messages-sidebar {
+      width: 18rem;
+      max-width: 18rem;
+      flex-shrink: 0;
+    }
+  }
+
+  .colex-messages-sidebar-list {
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .colex-messages-chat-wrap {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+    border-radius: 1.5rem;
+    border: 1px solid rgb(228 228 231 / 0.7);
+    background: #f6f6f6;
+  }
+
+  .colex-messages-chat {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .colex-messages-chat-messages {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .colex-messages-chat-empty {
+    display: flex;
+    flex: 1 1 0%;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    padding: 2rem;
+    text-align: center;
+    color: rgb(113 113 122);
+  }
+
+  /* Carrusel Negocios destacados (marquee) */
+  .colex-featured-marquee {
+    overflow: hidden;
+    mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+  }
+
+  .colex-featured-marquee-track {
+    display: flex;
+    width: max-content;
+    gap: 0.75rem;
+    animation: colex-featured-marquee 45s linear infinite;
+    will-change: transform;
+  }
+
+  .colex-featured-marquee:hover .colex-featured-marquee-track {
+    animation-play-state: paused;
+  }
+
+  @keyframes colex-featured-marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .colex-featured-marquee {
+      mask-image: none;
+      -webkit-mask-image: none;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .colex-featured-marquee-track {
+      animation: none;
+      padding-bottom: 0.25rem;
+    }
+  }
+
+  /*
+   * Rails home: mismas proporciones que la grilla de catálogo (cards default).
+   * Mobile/tablet: carrusel horizontal; desktop: grilla 4 columnas.
+   */
+  .colex-home-rail {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgb(161 161 170 / 0.45) transparent;
+    padding-bottom: 0.125rem;
+  }
+
+  @media (min-width: 1024px) {
+    .colex-home-rail {
+      overflow: visible;
+      padding-bottom: 0;
+    }
+  }
+
+  .colex-home-rail-track {
+    display: flex;
+    list-style: none;
+    gap: 0.75rem;
+    margin: 0;
+    padding: 0 0 0.25rem;
+    scroll-snap-type: x proximity;
+  }
+
+  .colex-home-rail-track > li {
+    flex: 0 0 auto;
+    width: calc(50% - 0.375rem);
+    min-width: 10.5rem;
+    scroll-snap-align: start;
+  }
+
+  @media (min-width: 640px) {
+    .colex-home-rail-track {
+      gap: 1rem;
+    }
+
+    .colex-home-rail-track > li {
+      width: calc(33.333% - 0.667rem);
+      min-width: 11.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .colex-home-rail {
+      overflow: visible;
+    }
+
+    .colex-home-rail-track {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1rem;
+      scroll-snap-type: none;
+      padding-bottom: 0;
+    }
+
+    .colex-home-rail-track > li {
+      width: auto;
+      min-width: 0;
+      flex: unset;
+    }
+  }
+}

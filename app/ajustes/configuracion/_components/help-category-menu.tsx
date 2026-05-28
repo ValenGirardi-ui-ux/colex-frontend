@@ -36,7 +36,7 @@ export function HelpCategoryMenu({
       </div>
 
       <aside className="hidden lg:block">
-        <div className="sticky top-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <div className="sticky top-4 rounded-2xl border border-zinc-200 bg-white p-4">
           <h3 className="mb-4 text-lg font-semibold text-zinc-900">Categorías</h3>
           <div className="space-y-2">
             {categories.map((category) => {

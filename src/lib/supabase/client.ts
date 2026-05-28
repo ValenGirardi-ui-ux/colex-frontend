@@ -14,8 +14,8 @@ function normalizeEnv(raw: string | undefined): string {
   return s;
 }
 
-const supabaseUrl = normalizeEnv(process.env.NEXT_PUBLIC_SUPABASE_URL);
-const supabaseAnonKey = normalizeEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+export const supabaseUrl = normalizeEnv(process.env.NEXT_PUBLIC_SUPABASE_URL);
+export const supabaseAnonKey = normalizeEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error("Faltan variables de entorno de Supabase");

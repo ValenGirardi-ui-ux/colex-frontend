@@ -1,7 +1,12 @@
 export type ProductCondition = "nuevo" | "usado";
 export type ProductNewCondition = "con_etiqueta" | "sin_etiqueta";
 export type ProductUsedCondition = "casi_nuevo" | "algo_desgastado" | "bastante_desgastado" | "roto";
-export type ProductStatus = "active" | "sold" | "paused";
+/** `active` = publicado y visible en catálogo; `draft` = borrador del vendedor. */
+export type ProductStatus = "active" | "sold" | "paused" | "draft";
+
+export function isPublishedProduct(status: ProductStatus): boolean {
+  return status === "active";
+}
 
 /**
  * Tipo base para productos en Supabase (tabla `products`).
@@ -13,15 +18,26 @@ export type Product = {
   description: string;
   price: number;
   category: string;
-  condition: ProductCondition;
+  condition: ProductCondition | null;
   new_condition: ProductNewCondition | null;
   used_condition: ProductUsedCondition | null;
   institution: string | null;
+  brand: string | null;
   location: string;
   size: string | null;
+  /** Etiquetas opcionales (columna o JSON en Supabase). */
+  tags?: string[] | string | null;
+  delivery_method: SellDeliveryMethod | null;
   status: ProductStatus;
   created_at: string;
   images: string[];
+  /** Enriquecido desde `profiles`: vendedor con is_premium o is_featured (badge + etiqueta Destacado). */
+  seller_verified?: boolean;
+  /** Enriquecido desde `profiles`: vendedor con plan Premium activo. */
+  seller_premium?: boolean;
+  /** Promedio de reseñas del vendedor (tabla `reviews`). */
+  seller_rating_avg?: number;
+  seller_review_count?: number;
 };
 
 export type ProductInsert = Omit<Product, "id" | "created_at"> & {
@@ -32,5 +48,4 @@ export type ProductInsert = Omit<Product, "id" | "created_at"> & {
 /** Alias para mantener semántica en pantallas de detalle */
 export type ProductDetail = Product;
 
-/** Formulario de publicación (pantalla Vender) — sin persistencia todavía */
-export type SellDeliveryMethod = "retiro" | "envio" | "ambos";
+export type SellDeliveryMethod = "retiro" | "envio" | "envio_domicilio" | "ambos";

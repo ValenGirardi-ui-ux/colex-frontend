@@ -24,5 +24,6 @@ export function formatConditionLabel(
 }
 
 export function formatProductCondition(product: Pick<Product, "condition" | "new_condition" | "used_condition">): string {
+  if (!product.condition) return "Sin especificar";
   return formatConditionLabel(product.condition, product.new_condition, product.used_condition);
 }

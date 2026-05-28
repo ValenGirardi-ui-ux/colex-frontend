@@ -1,9 +1,24 @@
-"use client";
+﻿"use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { initialMockConversations } from "@/src/data/mockConversations";
-import type { ChatMessage, Conversation } from "@/src/types/messages";
+import {
+  useChatSession,
+  useConversationThread,
+  useConversations,
+  useEnsureProductConversation,
+  useSendMessageMutation,
+} from "@/src/hooks/messages";
+import {
+  filterConversationsByTab,
+  inboxTabForConversation,
+  type MessagesInboxTab,
+} from "@/src/lib/conversation-inbox";
+import { ChatConversationPanel } from "@/app/mensajes/chat-conversation-panel";
+import { VerifiedName } from "@/app/components/verified-badge";
+import { getProductById } from "@/src/services/products";
+import type { Conversation } from "@/src/types/messages";
 
 function timeLabel(iso: string): string {
   try {
@@ -18,192 +33,350 @@ function timeLabel(iso: string): string {
   }
 }
 
-function cloneConversations(data: Conversation[]): Conversation[] {
-  return JSON.parse(JSON.stringify(data)) as Conversation[];
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function mergeInboxWithThread(
+  inbox: Conversation[],
+  activeId: string | null,
+  thread: Conversation | undefined,
+): Conversation[] {
+  if (!activeId || !thread) return inbox;
+  const idx = inbox.findIndex((c) => c.id === activeId);
+  if (idx === -1) return [...inbox, thread];
+  const next = [...inbox];
+  next[idx] = thread;
+  return next;
+}
+
+function parseInboxTab(value: string | null): MessagesInboxTab {
+  return value === "ventas" ? "ventas" : "chat";
 }
 
 export function MensajesInbox() {
   const searchParams = useSearchParams();
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const convParam = searchParams.get("conv");
+  const productoParam = searchParams.get("producto");
+  const errorParam = searchParams.get("error");
+  const tabParam = searchParams.get("tab");
+
+  const { data: userId, isLoading: sessionLoading } = useChatSession();
+  const {
+    data: inbox = [],
+    isLoading: inboxLoading,
+    error: inboxError,
+  } = useConversations(userId);
+
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [inboxTab, setInboxTab] = useState<MessagesInboxTab>(() => parseInboxTab(tabParam));
   const [draft, setDraft] = useState("");
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
-  const [initialized, setInitialized] = useState(false);
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [urlHandled, setUrlHandled] = useState(false);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+
+  const {
+    data: activeThread,
+    isLoading: threadLoading,
+    error: threadError,
+  } = useConversationThread(userId, activeId);
+
+  const sendMessageMutation = useSendMessageMutation(userId);
+  const ensureConversation = useEnsureProductConversation();
+
+  const conversations = useMemo(
+    () => mergeInboxWithThread(inbox, activeId, activeThread),
+    [inbox, activeId, activeThread],
+  );
+
+  const filteredConversations = useMemo(
+    () => filterConversationsByTab(conversations, inboxTab),
+    [conversations, inboxTab],
+  );
+
+  const loadError =
+    urlError ??
+    (inboxError instanceof Error ? inboxError.message : null) ??
+    (threadError instanceof Error ? threadError.message : null) ??
+    (sendMessageMutation.error instanceof Error ? sendMessageMutation.error.message : null);
 
   useEffect(() => {
-    setConversations(cloneConversations(initialMockConversations));
-    setActiveId(initialMockConversations[0]!.id);
-    setInitialized(true);
-  }, []);
+    if (sessionLoading || !userId || urlHandled) return;
 
-  const productoParam = searchParams.get("producto");
-
-  // Solo reacciona al producto de la URL; no re-ejecutar al agregar mensajes.
-  useEffect(() => {
-    if (!initialized || !productoParam) return;
-    const byProduct = initialMockConversations.find((c) => c.productId === productoParam);
-    if (byProduct) {
-      setActiveId(byProduct.id);
+    if (convParam && isUuid(convParam)) {
+      setActiveId(convParam);
       setMobileView("chat");
+      if (tabParam) {
+        setInboxTab(parseInboxTab(tabParam));
+      }
+      setUrlHandled(true);
+      return;
     }
-  }, [initialized, productoParam]);
+
+    if (!productoParam) {
+      if (!activeId && inbox.length > 0) {
+        const tabbed = filterConversationsByTab(inbox, inboxTab);
+        const first = tabbed[0] ?? inbox[0];
+        if (first) setActiveId(first.id);
+      }
+      setUrlHandled(true);
+      return;
+    }
+
+    const buyerId = userId;
+    let cancelled = false;
+
+    async function openProductChat() {
+      if (!productoParam) {
+        setUrlHandled(true);
+        return;
+      }
+      const product = await getProductById(productoParam);
+      if (cancelled) return;
+      if (!product || !isUuid(product.user_id)) {
+        setUrlHandled(true);
+        return;
+      }
+
+      try {
+        const result = await ensureConversation.mutateAsync({
+          productId: product.id,
+          productTitle: product.title,
+          buyerId,
+          sellerId: product.user_id,
+          conversationType: "chat",
+        });
+        if (cancelled) return;
+        if (result.conversationId) {
+          setActiveId(result.conversationId);
+          setInboxTab("chat");
+          setMobileView("chat");
+        } else if (result.error) {
+          setUrlError(result.error);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setUrlError(err instanceof Error ? err.message : "No se pudo abrir el chat.");
+        }
+      } finally {
+        if (!cancelled) setUrlHandled(true);
+      }
+    }
+
+    void openProductChat();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- apertura única por URL
+  }, [sessionLoading, userId, convParam, productoParam, urlHandled, inbox.length]);
 
   const active = useMemo(
     () => conversations.find((c) => c.id === activeId) ?? null,
-    [conversations, activeId]
+    [conversations, activeId],
   );
+
+  useEffect(() => {
+    if (!convParam || !isUuid(convParam)) return;
+    const conv = conversations.find((c) => c.id === convParam);
+    if (!conv) return;
+    if (!tabParam) {
+      setInboxTab(inboxTabForConversation(conv));
+    }
+  }, [convParam, tabParam, conversations]);
+
+  useEffect(() => {
+    if (!activeId) return;
+    const visible = filteredConversations.some((c) => c.id === activeId);
+    if (!visible && filteredConversations.length > 0) {
+      setActiveId(filteredConversations[0]!.id);
+    }
+  }, [inboxTab, filteredConversations, activeId]);
+
+  const onSelectTab = useCallback((tab: MessagesInboxTab) => {
+    setInboxTab(tab);
+    setUrlError(null);
+    const tabbed = filterConversationsByTab(conversations, tab);
+    if (tabbed.length > 0) {
+      setActiveId(tabbed[0]!.id);
+    } else {
+      setActiveId(null);
+      setMobileView("list");
+    }
+  }, [conversations]);
 
   const onSelect = useCallback((id: string) => {
     setActiveId(id);
     setMobileView("chat");
-  }, []);
+    setUrlError(null);
+    const conv = conversations.find((c) => c.id === id);
+    if (conv) {
+      setInboxTab(inboxTabForConversation(conv));
+    }
+  }, [conversations]);
 
   const onBack = useCallback(() => {
     setMobileView("list");
   }, []);
 
+  useEffect(() => {
+    const el = messagesScrollRef.current;
+    if (!el || !active) return;
+    el.scrollTop = el.scrollHeight;
+  }, [active?.id, active?.messages.length, threadLoading]);
+
   const send = useCallback(() => {
     const t = draft.trim();
-    if (!t || !activeId) return;
-    const newMsg: ChatMessage = {
-      id: `m-${Date.now()}`,
-      sender: "me",
-      text: t,
-      createdAt: new Date().toISOString(),
-    };
-    setConversations((prev) =>
-      prev.map((c) => {
-        if (c.id !== activeId) return c;
-        return {
-          ...c,
-          lastMessage: t,
-          lastMessageAt: newMsg.createdAt,
-          messages: [...c.messages, newMsg],
-        };
-      })
+    if (!t || !activeId || !userId || sendMessageMutation.isPending) return;
+    sendMessageMutation.mutate(
+      { conversationId: activeId, content: t },
+      {
+        onSuccess: () => setDraft(""),
+        onError: () => {},
+      },
     );
-    setDraft("");
-  }, [draft, activeId]);
+  }, [draft, activeId, userId, sendMessageMutation]);
 
-  if (!initialized) {
+  const loading = sessionLoading || (Boolean(userId) && inboxLoading && !urlHandled);
+
+  if (loading) {
     return (
-      <div className="px-4 py-16 text-center text-sm text-zinc-500" role="status">
-        Cargando mensajes…
+      <div className="colex-messages-inbox flex items-center justify-center px-4" role="status">
+        <p className="text-base text-zinc-500">Cargando mensajes…</p>
+      </div>
+    );
+  }
+
+  if (!userId) {
+    return (
+      <div className="colex-messages-inbox flex items-center justify-center px-4">
+        <div className="max-w-md text-center">
+          <p className="text-base text-zinc-600">Iniciá sesión para ver tus conversaciones.</p>
+          <Link
+            href={`/login?next=${encodeURIComponent("/mensajes")}`}
+            className="mt-4 inline-flex h-11 items-center justify-center rounded-full bg-[#822020] px-6 text-base font-semibold text-white hover:bg-[#6d1b1b]"
+          >
+            Iniciar sesión
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto flex min-h-[60vh] w-full max-w-[1240px] flex-1 p-3 sm:p-4 lg:p-6">
-      <div
-        className={`${
-          mobileView === "chat" ? "hidden" : "flex"
-        } w-full flex-col rounded-3xl border border-zinc-200/70 bg-white/95 shadow-[0_8px_30px_rgba(24,24,27,0.06)] lg:block lg:max-w-sm xl:max-w-md`}
-      >
-        <div className="border-b border-zinc-100 px-5 py-4 lg:py-5">
-          <h2 className="text-lg font-bold text-zinc-900">Conversaciones</h2>
-        </div>
-        <ul className="max-h-[60vh] flex-1 space-y-2 overflow-y-auto p-3 lg:max-h-[calc(100vh-220px)]">
-          {conversations.map((c) => (
-            <li key={c.id} className="first:pt-0">
+    <div className="colex-messages-inbox mx-auto w-full max-w-[1240px] min-w-0 px-2 py-2 max-lg:px-2 lg:px-4 lg:py-3">
+      {loadError || errorParam ? (
+        <p
+          role="alert"
+          className="mb-2 w-full shrink-0 rounded-xl border border-[#822020]/25 bg-[#822020]/10 px-4 py-2.5 text-sm text-[#6d1b1b]"
+        >
+          {loadError ??
+            (errorParam === "demo-no-chat"
+              ? "Este producto de demostración no tiene vendedor con cuenta. Publicá o comprá un producto real para chatear."
+              : "No se pudo abrir el chat.")}
+        </p>
+      ) : null}
+
+      <div className="colex-messages-split">
+        <aside
+          className={`colex-messages-sidebar ${mobileView === "chat" ? "max-lg:hidden" : "max-lg:flex max-lg:flex-1"}`}
+        >
+          <div className="shrink-0 border-b border-zinc-100 px-4 py-3 lg:px-5">
+            <h2 className="text-lg font-bold text-zinc-900">Mensajes</h2>
+            <div
+              className="mt-2.5 flex gap-1 rounded-full bg-zinc-100 p-1"
+              role="tablist"
+              aria-label="Tipo de conversaciones"
+            >
               <button
                 type="button"
-                onClick={() => onSelect(c.id)}
-                className={`flex w-full gap-3 rounded-2xl border border-transparent px-4 py-3.5 text-left transition hover:bg-zinc-50 ${
-                  c.id === activeId
-                    ? "border-[#822020]/15 bg-[#822020]/[0.07] shadow-[0_6px_20px_rgba(130,32,32,0.09)]"
-                    : "bg-white"
+                role="tab"
+                aria-selected={inboxTab === "chat"}
+                onClick={() => onSelectTab("chat")}
+                className={`flex-1 rounded-full px-3 py-2 text-sm font-semibold transition ${
+                  inboxTab === "chat"
+                    ? "bg-white text-[#822020]"
+                    : "text-zinc-600 hover:text-zinc-900"
                 }`}
               >
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#822020]/10 text-sm font-semibold text-[#822020]">
-                  {c.peerInitials}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium text-zinc-900">{c.peerName}</p>
-                  <p className="truncate text-xs text-zinc-500">{c.productLabel}</p>
-                  <p className="line-clamp-1 text-sm text-zinc-600">{c.lastMessage}</p>
-                  <p className="text-xs text-zinc-400">{timeLabel(c.lastMessageAt)}</p>
-                </div>
+                Chat
               </button>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div
-        className={`${
-          mobileView === "list" ? "hidden" : "flex"
-        } min-h-0 w-full min-w-0 flex-1 flex-col rounded-3xl border border-zinc-200/70 bg-[#F6F6F6] shadow-[0_8px_30px_rgba(24,24,27,0.06)] lg:flex`}
-      >
-        {active ? (
-          <>
-            <div className="shrink-0 border-b border-zinc-200/80 bg-white px-5 py-4 lg:px-6 lg:py-5">
-              <div className="flex items-center gap-2 lg:gap-3">
-                <button
-                  type="button"
-                  onClick={onBack}
-                  className="-ml-1 flex h-9 w-9 items-center justify-center rounded-full text-zinc-700 transition hover:bg-zinc-100 lg:hidden"
-                  aria-label="Volver a conversaciones"
-                >
-                  ←
-                </button>
-                <div>
-                  <p className="font-semibold text-zinc-900">{active.peerName}</p>
-                  <p className="text-sm text-zinc-500">{active.productLabel}</p>
-                </div>
-              </div>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={inboxTab === "ventas"}
+                onClick={() => onSelectTab("ventas")}
+                className={`flex-1 rounded-full px-3 py-2 text-sm font-semibold transition ${
+                  inboxTab === "ventas"
+                    ? "bg-white text-[#822020]"
+                    : "text-zinc-600 hover:text-zinc-900"
+                }`}
+              >
+                Ventas
+              </button>
             </div>
-            <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto px-4 py-5 lg:px-7">
-              {active.messages.map((m) => (
-                <div
-                  key={m.id}
-                  className={`flex ${m.sender === "me" ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    className={`max-w-[85%] px-4 py-2.5 text-sm shadow-sm sm:max-w-[70%] ${
-                      m.sender === "me"
-                        ? "rounded-[22px] rounded-br-md bg-[#822020] text-white"
-                        : "rounded-[22px] rounded-bl-md border border-zinc-200/80 bg-white text-zinc-800"
+          </div>
+          <ul className="colex-messages-sidebar-list space-y-1.5 p-2">
+            {filteredConversations.length === 0 ? (
+              <li className="px-3 py-8 text-center text-sm text-zinc-500">
+                {inboxTab === "ventas"
+                  ? "No tenés consultas de compradores sobre tus publicaciones."
+                  : "Todavía no tenés chats. Comprá o contactá a un vendedor desde un producto."}
+              </li>
+            ) : (
+              filteredConversations.map((c) => (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    onClick={() => onSelect(c.id)}
+                    className={`flex w-full gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+                      c.id === activeId
+                        ? "border-[#822020]/20 bg-[#822020]/[0.08]"
+                        : "border-transparent bg-white hover:bg-zinc-50"
                     }`}
                   >
-                    <p className="whitespace-pre-wrap break-words">{m.text}</p>
-                    <p
-                      className={`mt-1 text-[10px] sm:text-xs ${
-                        m.sender === "me" ? "text-white/80" : "text-zinc-400"
-                      }`}
-                    >
-                      {timeLabel(m.createdAt)}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#822020]/10 text-sm font-semibold text-[#822020]">
+                      {c.peerInitials}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <VerifiedName verified={c.peerIsVerified} nameClassName="font-medium text-zinc-900">
+                        {c.peerName}
+                      </VerifiedName>
+                      {c.peerEmail ? (
+                        <p className="truncate text-xs text-zinc-400">{c.peerEmail}</p>
+                      ) : null}
+                      <p className="truncate text-xs text-zinc-500">{c.productLabel}</p>
+                      <p className="line-clamp-1 text-sm text-zinc-600">{c.lastMessage}</p>
+                      <p className="text-xs text-zinc-400">{timeLabel(c.lastMessageAt)}</p>
+                    </div>
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        </aside>
+
+        <section
+          className={`colex-messages-chat-wrap ${mobileView === "list" ? "max-lg:hidden" : "max-lg:flex max-lg:flex-1"}`}
+        >
+          {active ? (
+            <ChatConversationPanel
+              conversation={active}
+              draft={draft}
+              threadLoading={threadLoading}
+              sendPending={sendMessageMutation.isPending}
+              messagesScrollRef={messagesScrollRef}
+              onDraftChange={setDraft}
+              onSend={send}
+              onBack={onBack}
+            />
+          ) : (
+            <div className="colex-messages-chat-empty text-base">
+              Seleccioná una conversación
             </div>
-            <div className="shrink-0 border-t border-zinc-200/80 bg-white p-4 lg:p-5">
-              <div className="mx-auto flex max-w-3xl flex-col gap-2.5 sm:flex-row sm:items-end">
-                <label className="sr-only" htmlFor="mensaje-input">
-                  Escribir mensaje
-                </label>
-                <textarea
-                  id="mensaje-input"
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  rows={2}
-                  placeholder="Escribí tu mensaje…"
-                  className="w-full min-h-11 flex-1 resize-y rounded-[26px] border border-zinc-200/90 bg-zinc-50/70 px-4 py-3 text-sm text-zinc-900 outline-none focus:border-[#822020] focus:ring-2 focus:ring-[#822020]/20 sm:min-h-0 sm:py-3.5"
-                />
-                <button
-                  type="button"
-                  onClick={send}
-                  className="h-11 shrink-0 rounded-full bg-[#822020] px-6 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(130,32,32,0.28)] transition hover:bg-[#6d1b1b] sm:h-12 sm:px-7"
-                >
-                  Enviar
-                </button>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="flex flex-1 items-center justify-center p-8 text-zinc-500">Seleccioná una conversación</div>
-        )}
+          )}
+        </section>
       </div>
     </div>
   );

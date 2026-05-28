@@ -9,15 +9,15 @@ const quickLinks = [
 ];
 
 const helpLinks = [
-  { href: "/ajustes", label: "Centro de ayuda" },
-  { href: "/ajustes", label: "Contactar soporte" },
-  { href: "/ajustes/configuracion", label: "Ajustes" },
+  { href: "/ajustes?tab=ayuda", label: "Centro de ayuda" },
+  { href: "/ajustes?tab=soporte", label: "Contactar soporte" },
+  { href: "/ajustes", label: "Ajustes" },
 ];
 
 export function Footer() {
   return (
     <footer className="mt-auto border-t border-zinc-200/80 bg-zinc-50/80">
-      <div className="mx-auto grid w-full max-w-[1240px] gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[1.25fr_1fr_1fr] lg:gap-10 lg:py-12">
+      <div className="mx-auto hidden w-full max-w-[1240px] gap-8 px-4 py-10 sm:px-6 lg:grid lg:grid-cols-[1.25fr_1fr_1fr] lg:gap-10 lg:py-12">
         <section className="space-y-3">
           <Link
             href="/"
@@ -57,7 +57,7 @@ export function Footer() {
           </ul>
         </section>
       </div>
-      <div className="border-t border-zinc-200/80 px-4 py-4 text-center text-xs text-zinc-500 sm:text-sm">
+      <div className="border-t border-zinc-200/80 px-4 py-3 text-center text-xs text-zinc-500 max-lg:pb-2 sm:text-sm lg:py-4">
         © 2026 Colex. Todos los derechos reservados.
       </div>
     </footer>

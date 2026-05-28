@@ -15,7 +15,7 @@ export function QuickAccessChips({ items, onSelect }: QuickAccessChipsProps) {
             key={item}
             type="button"
             onClick={() => onSelect(item)}
-            className="rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-700 shadow-sm transition hover:border-[#0A8FA1]/50 hover:text-[#0A8FA1] active:scale-[0.98]"
+            className="rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-700 transition hover:border-[#0A8FA1]/50 hover:text-[#0A8FA1] active:scale-[0.98]"
           >
             {item}
           </button>

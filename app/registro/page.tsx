@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { SiteHeader } from "../components/site-header";
-import { registerWithEmail } from "@/src/services/auth";
+import { formatAuthErrorForUser, registerWithEmail } from "@/src/services/auth";
 
 export default function RegistroPage() {
   const router = useRouter();
@@ -32,28 +32,39 @@ export default function RegistroPage() {
     }
 
     setBusy(true);
-    const { error, sessionActive } = await registerWithEmail(email, password, fullName.trim());
-    setBusy(false);
+    try {
+      const { error, sessionActive } = await registerWithEmail(email, password, fullName.trim());
 
-    if (error) {
-      setFeedback({ type: "error", text: error });
-      return;
+      if (error) {
+        setFeedback({ type: "error", text: error });
+        return;
+      }
+
+      if (sessionActive) {
+        setFeedback({ type: "success", text: "¡Cuenta creada! Redirigiendo…" });
+        router.refresh();
+        router.push("/perfil");
+        return;
+      }
+
+      setFeedback({
+        type: "success",
+        text: "¡Registro exitoso! Si tu proyecto tiene confirmación por email, revisá tu bandeja y luego iniciá sesión. Te llevamos al login.",
+      });
+      setTimeout(() => {
+        router.push("/login");
+      }, 2600);
+    } catch (unexpected) {
+      console.error("[Colex registro] error inesperado", unexpected);
+      setFeedback({
+        type: "error",
+        text: formatAuthErrorForUser(
+          unexpected instanceof Error ? unexpected.message : String(unexpected),
+        ),
+      });
+    } finally {
+      setBusy(false);
     }
-
-    if (sessionActive) {
-      setFeedback({ type: "success", text: "¡Cuenta creada! Redirigiendo…" });
-      router.refresh();
-      router.push("/perfil");
-      return;
-    }
-
-    setFeedback({
-      type: "success",
-      text: "¡Registro exitoso! Si tu proyecto tiene confirmación por email, revisá tu bandeja y luego iniciá sesión. Te llevamos al login.",
-    });
-    setTimeout(() => {
-      router.push("/login");
-    }, 2600);
   }
 
   const feedbackClass =
@@ -65,7 +76,7 @@ export default function RegistroPage() {
     <div className="min-h-screen bg-[#F6F6F6] text-zinc-900">
       <SiteHeader />
       <main className="mx-auto w-full max-w-[1240px] px-4 py-8 lg:px-6 lg:py-10">
-        <section className="mx-auto w-full max-w-md rounded-3xl border border-zinc-200/90 bg-white p-6 shadow-sm sm:p-7">
+        <section className="mx-auto w-full max-w-md rounded-3xl border border-zinc-200/90 bg-white p-6 sm:p-7">
           <h1 className="text-3xl font-semibold tracking-tight text-[#822020] sm:text-4xl">Crear cuenta</h1>
           <p className="mt-2 text-sm text-zinc-600 sm:text-base">Registrate para publicar, comprar y guardar favoritos.</p>
 
@@ -118,15 +129,6 @@ export default function RegistroPage() {
               />
             </label>
 
-            {feedback ? (
-              <p
-                className={`rounded-xl border px-3 py-2 text-sm ${feedbackClass}`}
-                role="status"
-              >
-                {feedback.text}
-              </p>
-            ) : null}
-
             <button
               type="submit"
               disabled={busy}
@@ -134,6 +136,15 @@ export default function RegistroPage() {
             >
               {busy ? "Registrando…" : "Registrarme"}
             </button>
+
+            {feedback ? (
+              <p
+                className={`rounded-xl border px-3 py-2 text-sm leading-relaxed ${feedbackClass}`}
+                role={feedback.type === "error" ? "alert" : "status"}
+              >
+                {feedback.text}
+              </p>
+            ) : null}
           </form>
 
           <p className="mt-5 text-sm text-zinc-600">

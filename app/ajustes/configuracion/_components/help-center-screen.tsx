@@ -161,7 +161,7 @@ export function HelpCenterScreen() {
 
         <div className="space-y-6">
           {totalMatches === 0 ? (
-            <section className="rounded-2xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
+            <section className="rounded-2xl border border-zinc-200 bg-white p-8 text-center">
               <p className="text-lg font-semibold text-zinc-900">No encontramos resultados</p>
               <p className="mt-2 text-sm text-zinc-600">
                 Probá con otra palabra clave o cambiá de categoría para encontrar ayuda.
@@ -206,7 +206,7 @@ export function HelpCenterScreen() {
               {specificHelpBlocks.map((block) => (
                 <article
                   key={block.title}
-                  className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:border-zinc-300"
+                  className="rounded-xl border border-zinc-200 bg-white p-4 transition hover:border-zinc-300"
                 >
                   <p className="text-sm font-semibold text-zinc-900">{block.title}</p>
                   <p className="mt-1 text-sm text-zinc-600">{block.description}</p>

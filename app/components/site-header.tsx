@@ -1,63 +1,48 @@
 import Link from "next/link";
-
-const categories = [
-  { label: "Arte", href: "/categoria/arte" },
-  { label: "Ropa", href: "/categoria/ropa" },
-  { label: "Uniformes", href: "/categoria/uniformes" },
-  { label: "Accesorios", href: "/categoria/accesorios" },
-  { label: "Tecnologia", href: "/categoria/tecnologia" },
-  { label: "Deporte", href: "/categoria/deporte" },
-  { label: "Libro", href: "/categoria/libro" },
-];
+import { Suspense } from "react";
+import { CategoryMegaMenu } from "@/app/components/category-mega-menu";
+import { ProductSearchForm } from "@/app/components/product-search-form";
+import { NotificationsBell } from "@/app/components/notifications-bell";
+import { SiteHeaderAuthLink } from "@/app/components/site-header-auth-link";
 
 export function SiteHeader() {
   return (
-    <header className="border-b border-zinc-200 bg-white">
-      <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-4 px-4 py-4 lg:px-6">
-        <div className="flex flex-wrap items-center gap-3 lg:flex-nowrap lg:gap-6">
+    <header className="relative z-30 border-b border-zinc-200 bg-white">
+      <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-2 px-4 pt-4 pb-0 max-lg:gap-2 max-lg:pt-3 lg:px-6">
+        <div className="grid max-lg:grid-cols-[minmax(0,1fr)_auto] max-lg:grid-rows-[auto_auto] max-lg:items-center max-lg:gap-x-2 max-lg:gap-y-2.5 lg:flex lg:flex-wrap lg:items-center lg:gap-6">
           <Link
             href="/"
-            className="text-4xl font-bold italic leading-none text-[#8E1B22]"
+            className="max-lg:col-start-1 max-lg:row-start-1 text-3xl font-bold italic leading-none text-[#8E1B22] lg:text-4xl"
             aria-label="Colex"
           >
             colex
           </Link>
 
-          <label className="flex-1" htmlFor="colex-header-search">
-            <span className="sr-only">Busca un articulo</span>
-            <input
+          <Suspense
+            fallback={
+              <div className="max-lg:col-span-2 max-lg:row-start-2 max-lg:h-10 max-lg:animate-pulse max-lg:rounded-xl max-lg:bg-zinc-100 lg:min-w-0 lg:flex-1" />
+            }
+          >
+            <ProductSearchForm
               id="colex-header-search"
-              name="q"
-              type="text"
-              inputMode="search"
-              autoComplete="off"
               placeholder="Busca un artículo"
-              className="h-12 w-full rounded-xl border border-zinc-300 px-4 text-sm text-zinc-900 outline-none transition focus:border-zinc-400"
+              className="max-lg:col-span-2 max-lg:row-start-2 max-lg:min-w-0 max-lg:w-full lg:min-w-0 lg:flex-1"
+              inputClassName="h-10 w-full min-w-0 rounded-xl border border-zinc-300 px-3 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-4 focus:ring-[#822020]/10 lg:h-12 lg:px-4"
             />
-          </label>
+          </Suspense>
 
-          <div className="ml-auto flex items-center gap-3 text-zinc-900">
-            <Link
-              href="/login"
-              className="hidden rounded-lg px-2 py-1 text-sm text-zinc-700 hover:bg-zinc-100 sm:block"
-            >
-              Login
-            </Link>
-            <Link
-              href="/perfil"
-              className="hidden rounded-lg px-2 py-1 text-sm text-zinc-700 hover:bg-zinc-100 sm:block"
-            >
-              Cuenta
-            </Link>
+          <div className="ml-auto flex items-center gap-0.5 text-zinc-900 max-lg:col-start-2 max-lg:row-start-1 max-lg:shrink-0 lg:gap-3">
+            <SiteHeaderAuthLink />
+            <NotificationsBell />
             <Link
               href="/mensajes"
               aria-label="Mensajes"
-              className="p-2 text-zinc-800 transition hover:text-[#822020]"
+              className="max-lg:hidden p-1.5 text-zinc-800 transition hover:text-[#822020] lg:inline-flex lg:p-2"
             >
               <svg
                 aria-hidden="true"
                 viewBox="0 0 24 24"
-                className="h-8 w-8"
+                className="h-6 w-6 lg:h-8 lg:w-8"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
               >
@@ -73,12 +58,12 @@ export function SiteHeader() {
             <Link
               href="/favoritos"
               aria-label="Favoritos"
-              className="p-2 text-zinc-800 transition hover:text-[#822020]"
+              className="p-1.5 text-zinc-800 transition hover:text-[#822020] lg:p-2"
             >
               <svg
                 aria-hidden="true"
                 viewBox="0 0 24 24"
-                className="h-8 w-8"
+                className="h-6 w-6 lg:h-8 lg:w-8"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
               >
@@ -91,11 +76,11 @@ export function SiteHeader() {
                 />
               </svg>
             </Link>
-            <Link href="/ajustes" aria-label="Ajustes" className="p-2 md:-ml-1">
+            <Link href="/ajustes" aria-label="Ajustes" className="p-1.5 md:-ml-1 lg:p-2">
               <svg
                 aria-hidden="true"
                 viewBox="0 0 24 24"
-                className="h-[30px] w-[30px]"
+                className="h-7 w-7 lg:h-[30px] lg:w-[30px]"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
               >
@@ -117,20 +102,18 @@ export function SiteHeader() {
             </Link>
             <Link
               href="/vender"
-              className="rounded-full bg-[#822020] px-4 py-1.5 text-sm font-medium text-white transition hover:bg-[#6d1b1b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#822020]"
+              className="hidden rounded-full bg-[#822020] px-4 py-1.5 text-sm font-medium text-white transition hover:bg-[#6d1b1b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#822020] lg:inline-flex"
             >
               Vender
             </Link>
           </div>
         </div>
 
-        <nav className="flex flex-wrap justify-center gap-x-7 gap-y-2 pb-1 text-sm text-zinc-600">
-          {categories.map((category) => (
-            <Link key={category.href} href={category.href} className="transition hover:text-[#822020]">
-              {category.label}
-            </Link>
-          ))}
-        </nav>
+        <div className="flex items-center justify-center border-t border-zinc-100 py-2 max-lg:py-1.5">
+          <Suspense fallback={null}>
+            <CategoryMegaMenu />
+          </Suspense>
+        </div>
       </div>
     </header>
   );

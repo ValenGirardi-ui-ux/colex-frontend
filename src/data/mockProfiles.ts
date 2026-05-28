@@ -2,15 +2,30 @@ export type MockPublicProfile = {
   id: string;
   displayName: string;
   handle: string;
+  /** Nombre de usuario público (sin @) */
+  username?: string | null;
   avatarUrl: string | null;
   location: string;
   institution: string | null;
   memberSinceIso: string;
   bio: string;
   visibleContact: string | null;
+  phone?: string | null;
   /** Valores mock hasta conectar métricas reales */
   salesCount: number;
   purchasesCount: number;
+  /** Email de cuenta (p. ej. perfil propio desde Auth); opcional en mocks legacy */
+  accountEmail?: string | null;
+  /** Premium o destacado en Colex */
+  isVerified?: boolean;
+  /** Promedio y cantidad de reseñas recibidas */
+  reviewSummary?: { averageRating: number; count: number } | null;
+  /** Slug de tienda premium (`/tienda/[slug]`) */
+  shopSlug?: string | null;
+  /** Tienda premium publicada (botón seguir / visitar tienda). */
+  isPremiumStore?: boolean;
+  /** Línea bajo el nombre en perfiles premium/destacados (business_description o institution). */
+  profileTagline?: string | null;
 };
 
 export const MOCK_CURRENT_USER_ID = "mock-user";
@@ -18,8 +33,8 @@ export const MOCK_CURRENT_USER_ID = "mock-user";
 const PROFILES: Record<string, MockPublicProfile> = {
   [MOCK_CURRENT_USER_ID]: {
     id: MOCK_CURRENT_USER_ID,
-    displayName: "María González",
-    handle: "@mariagonzalez",
+    displayName: "Usuario de demostración",
+    handle: "demo@colex.app",
     avatarUrl: null,
     location: "Belgrano, CABA",
     institution: "Colegio San Martín",
@@ -28,6 +43,7 @@ const PROFILES: Record<string, MockPublicProfile> = {
     visibleContact: "Solo mensajes por Colex",
     salesCount: 12,
     purchasesCount: 28,
+    isVerified: false,
   },
   "seller-lucia": {
     id: "seller-lucia",
@@ -41,6 +57,7 @@ const PROFILES: Record<string, MockPublicProfile> = {
     visibleContact: "+54 9 341 600-0000",
     salesCount: 34,
     purchasesCount: 9,
+    isVerified: false,
   },
 };
 
