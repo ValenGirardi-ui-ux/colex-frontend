@@ -110,15 +110,15 @@ export function ProfileSalesPanel({
         {rows.map((row) => (
           <li
             key={row.id}
-            className="rounded-xl border border-zinc-100 bg-zinc-50/30 p-4 sm:p-5"
+            className="min-w-0 rounded-xl border border-zinc-100 bg-zinc-50/30 p-4 sm:p-5"
           >
-            <div className="flex flex-col gap-4">
-              <div className="grid gap-3 sm:grid-cols-2 sm:gap-x-6 lg:grid-cols-[1fr_1fr_auto]">
+            <div className="flex min-w-0 flex-col gap-4">
+              <div className="grid min-w-0 gap-3 sm:grid-cols-2 sm:gap-x-6 lg:grid-cols-[1fr_1fr_auto]">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Producto</p>
                   <Link
                     href={`/producto/${encodeURIComponent(row.product_id)}`}
-                    className="mt-0.5 block text-base font-semibold text-zinc-900 hover:text-[#822020]"
+                    className="mt-0.5 block break-words text-base font-semibold text-zinc-900 hover:text-[#822020]"
                   >
                     {row.product_title}
                   </Link>
@@ -134,7 +134,7 @@ export function ProfileSalesPanel({
                     </VerifiedName>
                   </Link>
                 </div>
-                <div className="sm:text-right lg:text-left">
+                <div className="min-w-0 sm:text-right lg:text-left">
                   <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Fecha</p>
                   <p className="mt-0.5 text-sm font-medium text-zinc-800">{formatOrderDate(row.created_at)}</p>
                 </div>

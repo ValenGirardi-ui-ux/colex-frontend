@@ -46,7 +46,7 @@
 do $$
 declare
   -- ⚠️ Cambiá a true SOLO en tu entorno local/staging de desarrollo.
-  v_enabled constant boolean := false;
+  v_enabled constant boolean := true;
 
   v_tables constant text[] := array[
     'messages',

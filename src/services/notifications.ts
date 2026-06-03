@@ -20,11 +20,11 @@ function rowToNotification(row: Record<string, unknown>): AppNotification {
 export function notificationHref(notification: AppNotification): string {
   switch (notification.type) {
     case "purchase_interest":
-      return "/perfil?tab=ventas";
+      return "/mensajes?tab=ventas";
     case "new_message":
       return "/mensajes";
     case "order_status":
-      return "/perfil?tab=compras";
+      return "/mensajes?tab=ventas";
     default:
       return "/";
   }

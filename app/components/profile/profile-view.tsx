@@ -1,11 +1,11 @@
+"use client";
+
 import Link from "next/link";
 import { StartPeerConversationButton } from "@/app/components/start-peer-conversation-button";
 import { FollowStoreButton } from "@/app/components/shop/follow-store-button";
-import { FollowedStoresPanel } from "@/app/components/shop/followed-stores-panel";
 import { ProfileDraftsList } from "@/app/components/profile/profile-drafts-list";
-import { ProfileListingsList } from "@/app/components/profile/profile-listings-list";
-import { ProfileOrdersList } from "@/app/components/profile/profile-orders-list";
-import { ProfileSalesPanel } from "@/app/components/profile/profile-sales-panel";
+import { ProfilePublicacionesOwn } from "@/app/components/profile/profile-publicaciones-own";
+import { ProfileHeaderStats } from "@/app/components/profile/profile-header-stats";
 import { ProductListGrid } from "@/app/components/product-list-grid";
 import { AddressMissingAlertSlot } from "@/app/components/addresses/address-missing-alert-slot";
 import { ProfileReviewsPanel } from "@/app/components/reviews/profile-reviews-panel";
@@ -21,19 +21,13 @@ import { initialsFromName } from "@/src/data/mockProfiles";
 export type ProfileTabKey =
   | "publicaciones"
   | "borradores"
-  | "compras"
-  | "ventas"
   | "favoritos"
-  | "tiendas"
   | "informacion";
 
 const TAB_ITEMS: Array<{ key: ProfileTabKey; label: string }> = [
   { key: "publicaciones", label: "Publicaciones" },
   { key: "borradores", label: "Borradores" },
-  { key: "compras", label: "Compras" },
-  { key: "ventas", label: "Ventas" },
   { key: "favoritos", label: "Favoritos" },
-  { key: "tiendas", label: "Tiendas que seguís" },
   { key: "informacion", label: "Información" },
 ];
 
@@ -150,23 +144,11 @@ export function ProfileView({
   const pubCount = listings.length;
   const visibleTabs = isOwnProfile
     ? TAB_ITEMS
-    : TAB_ITEMS.filter(
-        (t) =>
-          t.key !== "borradores" &&
-          t.key !== "compras" &&
-          t.key !== "ventas" &&
-          t.key !== "tiendas",
-      );
+    : TAB_ITEMS.filter((t) => t.key !== "borradores");
 
   const actionLabel = isOwnProfile ? "Editar perfil" : "Enviar mensaje";
   const primaryActionClassName =
     "inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#822020] px-6 text-base font-semibold text-white transition hover:bg-[#6d1b1b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#822020] disabled:cursor-not-allowed disabled:opacity-60";
-
-  const stats = [
-    { label: "Publicaciones", value: pubCount },
-    { label: "Ventas", value: profile.salesCount },
-    { label: "Compras", value: profile.purchasesCount },
-  ] as const;
 
   return (
     <div className="w-full min-w-0 bg-[#FFFFFF] px-3 pb-10 pt-5 max-lg:overflow-x-hidden sm:px-6 sm:pb-12 sm:pt-8 lg:px-8">
@@ -203,17 +185,12 @@ export function ProfileView({
 
               {/* Centro: métricas en fila + ubicación / institución */}
               <div className="min-w-0 flex-1 space-y-5 lg:border-l lg:border-zinc-100 lg:pl-6 xl:pl-10">
-                <div className="grid grid-cols-3 gap-2 sm:gap-4 lg:flex lg:flex-wrap lg:items-end lg:gap-x-10">
-                  {stats.map((stat, i) => (
-                    <div
-                      key={stat.label}
-                      className={`flex flex-col gap-0.5 max-lg:items-center max-lg:text-center lg:flex-row lg:items-baseline lg:gap-2 ${i > 0 ? "lg:border-l lg:border-zinc-200 lg:pl-6 xl:pl-10" : ""}`}
-                    >
-                      <span className="text-xl font-semibold tabular-nums text-zinc-900 sm:text-3xl">{stat.value}</span>
-                      <span className="text-xs font-medium text-zinc-500 sm:text-sm lg:pb-0.5">{stat.label}</span>
-                    </div>
-                  ))}
-                </div>
+                <ProfileHeaderStats
+                  publicationCount={pubCount}
+                  storeUserId={profile.id}
+                  showStoreFollowers={profile.isPremiumStore === true}
+                  followersLabel={isOwnProfile ? "Seguidores de tu tienda" : "Seguidores"}
+                />
                 <div className="space-y-2 text-sm leading-relaxed text-zinc-700 sm:text-base">
                   <p>
                     <span className="font-semibold text-zinc-500">Ubicación · </span>
@@ -248,7 +225,7 @@ export function ProfileView({
                   <FollowStoreButton
                     storeUserId={profile.id}
                     storeDisplayName={profile.displayName}
-                    showFollowerCount
+                    showFollowerCount={false}
                     layout="stack"
                     className="w-full"
                   />
@@ -308,12 +285,20 @@ export function ProfileView({
           {/* Contenido */}
           <div className="bg-[#FFFFFF] p-4 sm:p-7 sm:pt-6 lg:p-8">
             {activeTab === "publicaciones" ? (
-              isOwnProfile && userId && onListingsChanged ? (
-                <ProfileListingsList
-                  listings={listings}
-                  userId={userId}
-                  onChanged={onListingsChanged}
-                />
+              isOwnProfile && userId ? (
+                onListingsChanged ? (
+                  <ProfilePublicacionesOwn
+                    listings={listings}
+                    userId={userId}
+                    onListingsChanged={onListingsChanged}
+                    buyerOrders={buyerOrders}
+                    sellerSalesRows={sellerSalesRows}
+                    ordersLoadError={ordersLoadError}
+                    onSellerSaleUpdated={onSellerSaleUpdated}
+                  />
+                ) : (
+                  <p className="py-6 text-center text-base text-zinc-600">Cargando publicaciones…</p>
+                )
               ) : listings.length === 0 ? (
                 <p className="py-6 text-center text-base text-zinc-600">Sin publicaciones por ahora.</p>
               ) : (
@@ -329,25 +314,6 @@ export function ProfileView({
               )
             ) : null}
 
-            {activeTab === "compras" && isOwnProfile ? (
-              <ProfileOrdersList
-                orders={buyerOrders}
-                mode="buyer"
-                currentUserId={userId ?? null}
-                loadError={ordersLoadError}
-              />
-            ) : null}
-
-            {activeTab === "ventas" && isOwnProfile ? (
-              <ProfileSalesPanel
-                rows={sellerSalesRows}
-                sellerId={userId ?? null}
-                currentUserId={userId ?? null}
-                loadError={ordersLoadError}
-                onOrderUpdated={onSellerSaleUpdated}
-              />
-            ) : null}
-
             {activeTab === "favoritos" ? (
               !isOwnProfile ? (
                 <FavoritosPrivados />
@@ -356,10 +322,6 @@ export function ProfileView({
               ) : (
                 <ProductListGrid products={favorites} cardVariant="compact" />
               )
-            ) : null}
-
-            {activeTab === "tiendas" && isOwnProfile && userId ? (
-              <FollowedStoresPanel userId={userId} />
             ) : null}
 
             {activeTab === "informacion" ? (
@@ -434,14 +396,7 @@ export function ProfileView({
 }
 
 export function parseProfileTab(tab: string | undefined): ProfileTabKey {
-  if (
-    tab === "favoritos" ||
-    tab === "informacion" ||
-    tab === "borradores" ||
-    tab === "compras" ||
-    tab === "ventas" ||
-    tab === "tiendas"
-  ) {
+  if (tab === "favoritos" || tab === "informacion" || tab === "borradores") {
     return tab;
   }
   return "publicaciones";

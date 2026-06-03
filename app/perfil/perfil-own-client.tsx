@@ -107,13 +107,6 @@ export function PerfilOwnClient() {
     };
   }, [phase, user?.id, favReady, favoriteIdsKey]);
 
-  useEffect(() => {
-    if (phase !== "ready" || !user?.id) return;
-    if (activeTab !== "compras" && activeTab !== "ventas") return;
-    refreshOrders();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- refrescar al abrir Compras/Ventas
-  }, [phase, user?.id, activeTab]);
-
   const refreshDrafts = () => {
     if (!user?.id) return;
     void getDraftsByUserId(user.id).then(setDrafts);
@@ -126,17 +119,6 @@ export function PerfilOwnClient() {
 
   const handleSellerSaleUpdated = (row: SellerOrderRow) => {
     setSellerSalesRows((prev) => prev.map((r) => (r.id === row.id ? row : r)));
-  };
-
-  const refreshOrders = () => {
-    if (!user?.id) return;
-    void Promise.all([fetchOrdersForBuyer(user.id), fetchSellerSalesPanel(user.id)]).then(
-      ([buyerResult, sellerResult]) => {
-        setBuyerOrders(buyerResult.orders);
-        setSellerSalesRows(sellerResult.rows);
-        setOrdersLoadError(buyerResult.error ?? sellerResult.error);
-      },
-    );
   };
 
   if (phase === "loading") {

@@ -136,13 +136,13 @@ export function ProfileOrdersList({
         {orders.map((order) => (
           <li
             key={order.id}
-            className="rounded-xl border border-zinc-100 bg-zinc-50/30 p-4 sm:p-5"
+            className="min-w-0 rounded-xl border border-zinc-100 bg-zinc-50/30 p-4 sm:p-5"
           >
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0 flex-1">
                 <Link
                   href={`/producto/${encodeURIComponent(order.product_id)}`}
-                  className="text-base font-semibold text-zinc-900 hover:text-[#822020]"
+                  className="break-words text-base font-semibold text-zinc-900 hover:text-[#822020]"
                 >
                   {order.product_title}
                 </Link>
@@ -152,7 +152,7 @@ export function ProfileOrdersList({
                   {formatArsPrice(order.total_amount)}
                 </p>
               </div>
-              <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+              <div className="flex w-full min-w-0 shrink-0 flex-col items-stretch gap-2 sm:w-auto sm:items-end">
                 {mode === "seller" && sellerId ? (
                   <label className="flex w-full flex-col gap-1 sm:w-auto sm:items-end">
                     <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">

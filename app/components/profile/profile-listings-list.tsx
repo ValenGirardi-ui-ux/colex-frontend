@@ -62,7 +62,7 @@ export function ProfileListingsList({ listings, userId, onChanged }: ProfileList
           {error}
         </p>
       ) : null}
-      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <ul className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {listings.map((product) => {
           const thumb = product.images?.[0];
           const isBusy = busyId === product.id;
