@@ -1,4 +1,5 @@
-import { createClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Normaliza valores típicos de .env (espacios, comillas, BOM UTF-8). */
 function normalizeEnv(raw: string | undefined): string {
@@ -21,7 +22,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error("Faltan variables de entorno de Supabase");
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+/** Cliente browser con cookies (compatible con Server Components vía middleware). */
+export const supabase: SupabaseClient = createBrowserClient(supabaseUrl, supabaseAnonKey, {
+  isSingleton: true,
+});
 
 export const hasSupabaseEnv = true;
 
