@@ -17,6 +17,12 @@ export type ProfileRow = {
   shop_social_links?: unknown;
   is_premium?: boolean;
   is_featured?: boolean;
+  premium_started_at?: string | null;
+  premium_current_period_end?: string | null;
+  premium_cancel_at_period_end?: boolean;
+  premium_last_payment_at?: string | null;
+  premium_payment_provider?: string | null;
+  premium_payment_ref?: string | null;
   created_at?: string;
   updated_at?: string | null;
 };

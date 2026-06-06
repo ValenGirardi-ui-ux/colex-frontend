@@ -124,7 +124,8 @@ const PROFILE_CORE_SELECT =
   "id,email,username,full_name,phone,institution,bio,location,avatar_url,business_name,business_description,is_premium,is_featured,created_at,updated_at" as const;
 
 /** Incluye tienda premium (`20260516400000_profiles_premium_shop.sql`). */
-const PROFILE_ROW_SELECT = `${PROFILE_CORE_SELECT},shop_slug,shop_banner_url,shop_description,shop_social_links` as const;
+const PROFILE_ROW_SELECT =
+  `${PROFILE_CORE_SELECT},shop_slug,shop_banner_url,shop_description,shop_social_links,premium_started_at,premium_current_period_end,premium_cancel_at_period_end,premium_last_payment_at,premium_payment_provider,premium_payment_ref` as const;
 
 async function queryProfileRow(
   userId: string,
@@ -157,6 +158,13 @@ function rowFromUnknown(data: unknown): ProfileRow | null {
     shop_social_links: r.shop_social_links,
     is_premium: r.is_premium === true,
     is_featured: r.is_featured === true,
+    premium_started_at: typeof r.premium_started_at === "string" ? r.premium_started_at : null,
+    premium_current_period_end:
+      typeof r.premium_current_period_end === "string" ? r.premium_current_period_end : null,
+    premium_cancel_at_period_end: r.premium_cancel_at_period_end === true,
+    premium_last_payment_at: typeof r.premium_last_payment_at === "string" ? r.premium_last_payment_at : null,
+    premium_payment_provider: typeof r.premium_payment_provider === "string" ? r.premium_payment_provider : null,
+    premium_payment_ref: typeof r.premium_payment_ref === "string" ? r.premium_payment_ref : null,
     created_at: typeof r.created_at === "string" ? r.created_at : undefined,
     updated_at: typeof r.updated_at === "string" ? r.updated_at : null,
   };

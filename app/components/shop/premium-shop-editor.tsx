@@ -7,7 +7,16 @@ import { initialsFromName } from "@/src/data/mockProfiles";
 import { parseShopSocialLinks, premiumShopPath } from "@/src/lib/premium-shop";
 import { normalizeShopSlug } from "@/src/lib/shop-slug";
 import { uploadBusinessLogo, uploadShopBanner } from "@/src/services/profile-avatar";
+import { formatPremiumDateEs } from "@/src/lib/premium-billing";
+import { isPremiumEntitled } from "@/src/lib/premium-access";
+import {
+  cancelPremiumAtPeriodEnd,
+  deletePremiumShopData,
+  fetchPremiumSubscriptionStatus,
+  resumePremiumAutoRenew,
+} from "@/src/services/premium-subscription";
 import { isShopSlugTaken, savePremiumShopSettings } from "@/src/services/premium-shops";
+import type { PremiumSubscriptionStatus } from "@/src/types/premium-subscription";
 import type { ShopSocialLinks } from "@/src/types/shop";
 
 const inputClass =
@@ -61,6 +70,11 @@ export function PremiumShopEditor({
   const [bannerBusy, setBannerBusy] = useState(false);
   const [slugStatus, setSlugStatus] = useState<"idle" | "checking" | "ok" | "taken">("idle");
   const [saveFeedback, setSaveFeedback] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [subscription, setSubscription] = useState<PremiumSubscriptionStatus | null>(null);
+  const [deleteShopBusy, setDeleteShopBusy] = useState(false);
+  const [cancelPremiumBusy, setCancelPremiumBusy] = useState(false);
+  const [confirmDeleteShop, setConfirmDeleteShop] = useState(false);
+  const [confirmCancelPremium, setConfirmCancelPremium] = useState(false);
   const [form, setForm] = useState<FormState>({
     businessName: "",
     institution: "",
@@ -94,7 +108,13 @@ export function PremiumShopEditor({
         setSaveFeedback({ type: "err", text: profileErr });
       }
       setUserId(user.id);
-      setIsPremium(profile?.is_premium === true);
+      const entitled = isPremiumEntitled(profile);
+      setIsPremium(entitled);
+      const { status: subStatus } = await fetchPremiumSubscriptionStatus(user.id);
+      if (!cancelled && subStatus) {
+        setSubscription(subStatus);
+        setIsPremium(subStatus.entitled);
+      }
       if (profile) {
         const social = parseShopSocialLinks(profile.shop_social_links);
         const slug = profile.shop_slug?.trim() ?? "";
@@ -287,6 +307,81 @@ export function PremiumShopEditor({
   }
 
   const liveShopHref = slugPreview ? premiumShopPath(slugPreview) : savedShopPath;
+  const periodEndLabel = formatPremiumDateEs(subscription?.currentPeriodEnd);
+  const startedLabel = formatPremiumDateEs(subscription?.startedAt);
+
+  async function handleDeleteShop() {
+    if (!confirmDeleteShop) {
+      setConfirmDeleteShop(true);
+      return;
+    }
+    setDeleteShopBusy(true);
+    setSaveFeedback(null);
+    const { error } = await deletePremiumShopData();
+    setDeleteShopBusy(false);
+    setConfirmDeleteShop(false);
+    if (error) {
+      setSaveFeedback({ type: "err", text: error });
+      return;
+    }
+    setForm({
+      businessName: "",
+      institution: form.institution,
+      businessDescription: "",
+      shopDescription: "",
+      location: form.location,
+      avatarUrl: form.avatarUrl,
+      bannerUrl: null,
+      shopSlug: "",
+      socialLinks: { ...EMPTY_SOCIAL },
+    });
+    setSavedShopPath(null);
+    setSlugStatus("idle");
+    setSaveFeedback({
+      type: "ok",
+      text: "Tienda eliminada: se borraron slug, textos, banner y redes. Tu plan Premium sigue activo si lo tenías pagado.",
+    });
+  }
+
+  async function handleCancelPremium() {
+    if (!confirmCancelPremium) {
+      setConfirmCancelPremium(true);
+      return;
+    }
+    setCancelPremiumBusy(true);
+    setSaveFeedback(null);
+    const { error } = await cancelPremiumAtPeriodEnd();
+    setCancelPremiumBusy(false);
+    setConfirmCancelPremium(false);
+    if (error) {
+      setSaveFeedback({ type: "err", text: error });
+      return;
+    }
+    const { status: subStatus } = await fetchPremiumSubscriptionStatus(userId ?? undefined);
+    if (subStatus) setSubscription(subStatus);
+    setSaveFeedback({
+      type: "ok",
+      text: periodEndLabel
+        ? `Diste de baja Premium: no se te cobrará el próximo mes. Mantenés acceso hasta el ${periodEndLabel}.`
+        : "Diste de baja Premium: no se renovará el próximo cobro automático.",
+    });
+  }
+
+  async function handleResumePremium() {
+    setCancelPremiumBusy(true);
+    const { error } = await resumePremiumAutoRenew();
+    setCancelPremiumBusy(false);
+    if (error) {
+      setSaveFeedback({ type: "err", text: error });
+      return;
+    }
+    const { status: subStatus } = await fetchPremiumSubscriptionStatus(userId ?? undefined);
+    if (subStatus) setSubscription(subStatus);
+    setSaveFeedback({
+      type: "ok",
+      text: "Renovación automática reactivada. Se cobrará el mismo día cada mes si tenés medio de pago registrado.",
+    });
+  }
 
   return (
     <div id={id} className="space-y-6 scroll-mt-24">
@@ -570,6 +665,121 @@ export function PremiumShopEditor({
               </Link>
             ) : null}
           </div>
+
+          {subscription ? (
+            <div className="rounded-2xl border border-zinc-200 bg-white p-5 sm:p-6">
+              <p className={labelClass}>Tu plan Premium</p>
+              <ul className="mt-3 space-y-1.5 text-sm text-zinc-600">
+                {startedLabel ? (
+                  <li>
+                    Alta: <span className="font-medium text-zinc-800">{startedLabel}</span>
+                  </li>
+                ) : null}
+                {periodEndLabel ? (
+                  <li>
+                    {subscription.cancelAtPeriodEnd ? "Acceso hasta" : "Próximo cobro (mismo día cada mes)"}:{" "}
+                    <span className="font-medium text-zinc-800">{periodEndLabel}</span>
+                  </li>
+                ) : (
+                  <li>Cobro mensual el mismo día de tu alta (ej. 27/7 → 27/8).</li>
+                )}
+                {subscription.cancelAtPeriodEnd ? (
+                  <li className="text-[#822020]">Baja programada: no se cobrará el próximo mes.</li>
+                ) : subscription.willAutoRenew ? (
+                  <li>Renovación automática activa con tu medio de pago.</li>
+                ) : null}
+              </ul>
+            </div>
+          ) : null}
+
+          <section
+            className="rounded-2xl border border-[#822020]/20 bg-[#822020]/[0.04] p-5 sm:p-6"
+            aria-labelledby={`${id}-cancel-premium-heading`}
+          >
+            <h3 id={`${id}-cancel-premium-heading`} className="text-base font-semibold text-zinc-900">
+              Dar de baja Premium
+            </h3>
+            <p className="mt-2 text-sm text-zinc-600">
+              Si activás la baja, <strong>no se te cobrará el mes siguiente</strong>. Seguís usando Premium hasta el
+              fin del período ya pagado
+              {periodEndLabel ? ` (${periodEndLabel})` : ""}.
+            </p>
+            {subscription?.cancelAtPeriodEnd ? (
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                <p className="text-sm font-medium text-[#822020]">La baja ya está programada.</p>
+                <button
+                  type="button"
+                  disabled={cancelPremiumBusy}
+                  onClick={() => void handleResumePremium()}
+                  className={btnSecondaryClass}
+                >
+                  {cancelPremiumBusy ? "Procesando…" : "Mantener renovación automática"}
+                </button>
+              </div>
+            ) : (
+              <div className="mt-4 flex flex-col gap-2">
+                {confirmCancelPremium ? (
+                  <p className="text-sm font-medium text-zinc-800">¿Confirmás la baja del próximo cobro?</p>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={cancelPremiumBusy}
+                  onClick={() => void handleCancelPremium()}
+                  className="rounded-full border border-[#822020]/40 bg-white px-6 py-2.5 text-sm font-medium text-[#822020] transition hover:bg-[#822020]/[0.06] disabled:opacity-60"
+                >
+                  {cancelPremiumBusy
+                    ? "Procesando…"
+                    : confirmCancelPremium
+                      ? "Confirmar baja Premium"
+                      : "Dar de baja Premium"}
+                </button>
+                {confirmCancelPremium ? (
+                  <button
+                    type="button"
+                    className="text-sm text-zinc-500 underline-offset-2 hover:underline"
+                    onClick={() => setConfirmCancelPremium(false)}
+                  >
+                    Cancelar
+                  </button>
+                ) : null}
+              </div>
+            )}
+          </section>
+
+          <section
+            className="rounded-2xl border border-red-200/90 bg-red-50/50 p-5 sm:p-6"
+            aria-labelledby={`${id}-delete-shop-heading`}
+          >
+            <h3 id={`${id}-delete-shop-heading`} className="text-base font-semibold text-zinc-900">
+              Eliminar tienda
+            </h3>
+            <p className="mt-2 text-sm text-zinc-600">
+              Borra el slug, descripciones, banner, redes y nombre comercial de la tienda.{" "}
+              <strong>No cancela Premium</strong>; para eso usá la sección de arriba.
+            </p>
+            <div className="mt-4 flex flex-col gap-2">
+              {confirmDeleteShop ? (
+                <p className="text-sm font-medium text-red-800">Esta acción no se puede deshacer. ¿Eliminar tienda?</p>
+              ) : null}
+              <button
+                type="button"
+                disabled={deleteShopBusy}
+                onClick={() => void handleDeleteShop()}
+                className="rounded-full border border-red-300 bg-white px-6 py-2.5 text-sm font-medium text-red-800 transition hover:bg-red-100/80 disabled:opacity-60"
+              >
+                {deleteShopBusy ? "Eliminando…" : confirmDeleteShop ? "Sí, eliminar tienda" : "Eliminar tienda"}
+              </button>
+              {confirmDeleteShop ? (
+                <button
+                  type="button"
+                  className="text-sm text-zinc-500 underline-offset-2 hover:underline"
+                  onClick={() => setConfirmDeleteShop(false)}
+                >
+                  Cancelar
+                </button>
+              ) : null}
+            </div>
+          </section>
         </form>
 
         <div className="lg:sticky lg:top-24">

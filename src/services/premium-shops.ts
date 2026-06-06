@@ -1,4 +1,5 @@
 import { displayNameFromEmail } from "@/src/lib/auth-profile";
+import { isPremiumEntitled } from "@/src/lib/premium-access";
 import {
   canHavePremiumShop,
   parseShopSocialLinks,
@@ -76,7 +77,7 @@ function businessDisplayName(row: ShopProfileRow): string {
 
 function rowToPremiumShop(row: ShopProfileRow): PremiumShop | null {
   const slug = row.shop_slug?.trim();
-  if (!row.is_premium || !slug) return null;
+  if (!isPremiumEntitled(row) || !slug) return null;
   return {
     userId: row.id,
     slug,
@@ -134,6 +135,7 @@ export async function fetchPremiumShopBySlug(slug: string): Promise<PremiumShop 
     .ilike("shop_slug", normalized)
     .eq("is_premium", true)
     .maybeSingle();
+  // Acceso vigente validado en rowToPremiumShop (período de suscripción).
 
   if (error || !data) {
     if (error) console.warn("[Colex shops] by slug", error.message);

@@ -34,6 +34,7 @@ Sin `products`, la migración de **favoritos** falla por la foreign key.
 | 17 | `20260516300000_reviews.sql` | `reviews` |
 | 18 | `20260516400000_profiles_premium_shop.sql` | Tienda premium (`shop_slug`, etc.) |
 | 19 | `20260516500000_store_followers.sql` | Seguir tiendas + RPC contador |
+| 20 | `20260516600000_premium_subscription.sql` | Cobro mensual, baja Premium, fechas de período |
 
 ## Favoritos (error actual)
 

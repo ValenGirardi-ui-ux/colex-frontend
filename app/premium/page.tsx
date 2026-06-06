@@ -171,8 +171,8 @@ export default function PremiumPage() {
             <div>
               <h2 className="text-xl font-bold text-zinc-900 sm:text-2xl">¿Listo para crecer en Colex?</h2>
               <p className="mt-2 max-w-xl text-sm text-zinc-600 sm:text-base">
-                Activá Premium en un paso. El pago online llegará pronto; por ahora registramos tu interés de
-                forma inmediata.
+                Activá Premium con tu tarjeta. El cobro se repite el mismo día cada mes (ej. 27/7 → 27/8) salvo que
+                des de baja desde Editar mi tienda.
               </p>
             </div>
             <PremiumActivateButton />

@@ -9,21 +9,19 @@ function sessionHasUser(session: Session | null): boolean {
   return Boolean(session?.user);
 }
 
+/** Icono de perfil: anillo fino + cabeza y hombros solo contorno, fondo blanco. */
 function ProfileIcon({ className }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      aria-hidden
-    >
-      <circle cx="12" cy="9" r="3.25" />
+    <svg viewBox="0 0 24 24" className={className} aria-hidden xmlns="http://www.w3.org/2000/svg">
+      <circle cx="12" cy="12" r="10.25" className="fill-white" />
+      <circle cx="12" cy="12" r="9.15" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="12" cy="8.85" r="3.45" fill="none" stroke="currentColor" strokeWidth="1.6" />
       <path
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
         strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M6.5 19.25c.94-2.49 3.08-4.25 5.5-4.25s4.56 1.76 5.5 4.25"
+        d="M6.55 19.4c.95-2.85 2.95-4.25 5.45-4.25s4.5 1.4 5.45 4.25"
       />
     </svg>
   );
@@ -63,26 +61,21 @@ export function SiteHeaderAuthLink() {
   const signedInLabel = "Tu perfil";
   const signedOutLabel = "Iniciar sesión";
 
+  const profileButtonClass =
+    "inline-flex shrink-0 text-[#3f3f46] transition-colors hover:text-[#822020] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#822020]";
+
   if (!ready) {
     return (
-      <span
-        className="inline-flex h-9 w-9 items-center justify-center rounded-lg p-1.5 lg:p-2"
-        aria-busy="true"
-        aria-label="Comprobando sesión"
-      >
-        <span className="inline-block h-6 w-6 animate-pulse rounded-full bg-zinc-200 lg:h-8 lg:w-8" />
+      <span className={profileButtonClass} aria-busy="true" aria-label="Comprobando sesión">
+        <ProfileIcon className="h-8 w-8 rounded-full bg-white animate-pulse opacity-40 lg:h-9 lg:w-9" />
       </span>
     );
   }
 
   if (signedIn) {
     return (
-      <Link
-        href="/perfil"
-        aria-label={signedInLabel}
-        className="inline-flex p-1.5 text-zinc-800 transition hover:text-[#822020] lg:p-2"
-      >
-        <ProfileIcon className="h-6 w-6 lg:h-8 lg:w-8" />
+      <Link href="/perfil" aria-label={signedInLabel} className={profileButtonClass}>
+        <ProfileIcon className="h-8 w-8 rounded-full bg-white lg:h-9 lg:w-9" />
       </Link>
     );
   }

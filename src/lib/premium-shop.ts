@@ -1,3 +1,4 @@
+import { isPremiumEntitled } from "@/src/lib/premium-access";
 import type { ProfileRow } from "@/src/types/profile";
 import type { ShopSocialLinks } from "@/src/types/shop";
 
@@ -5,22 +6,24 @@ export function premiumShopPath(slug: string): string {
   return `/tienda/${encodeURIComponent(slug.trim().toLowerCase())}`;
 }
 
-export function canHavePremiumShop(profile: Pick<ProfileRow, "is_premium"> | null | undefined): boolean {
-  return profile?.is_premium === true;
+export function canHavePremiumShop(
+  profile: Pick<ProfileRow, "is_premium" | "premium_current_period_end" | "premium_cancel_at_period_end"> | null | undefined,
+): boolean {
+  return isPremiumEntitled(profile);
 }
 
 export function profileHasPublishedShop(
-  profile: Pick<ProfileRow, "is_premium" | "shop_slug"> | null | undefined,
+  profile: Pick<ProfileRow, "is_premium" | "premium_current_period_end" | "premium_cancel_at_period_end" | "shop_slug"> | null | undefined,
 ): boolean {
   return canHavePremiumShop(profile) && Boolean(profile?.shop_slug?.trim());
 }
 
 export function resolvePublicShopHref(
-  profile: Pick<ProfileRow, "id" | "is_premium" | "shop_slug">,
+  profile: Pick<ProfileRow, "id" | "is_premium" | "premium_current_period_end" | "premium_cancel_at_period_end" | "shop_slug">,
   fallbackProfilePath: string,
 ): string {
   const slug = profile.shop_slug?.trim();
-  if (profile.is_premium === true && slug) {
+  if (isPremiumEntitled(profile) && slug) {
     return premiumShopPath(slug);
   }
   return fallbackProfilePath;

@@ -628,7 +628,8 @@ export function AjustesScreen() {
       const user = await getCurrentUser();
       if (cancelled || !user) return;
       const { profile } = await fetchProfileByUserId(user.id);
-      if (!cancelled) setShowNegocioNav(profile?.is_premium === true);
+      const { isPremiumEntitled } = await import("@/src/lib/premium-access");
+      if (!cancelled) setShowNegocioNav(isPremiumEntitled(profile));
     })();
     return () => {
       cancelled = true;
