@@ -9,12 +9,10 @@ function sessionHasUser(session: Session | null): boolean {
   return Boolean(session?.user);
 }
 
-/** Icono de perfil: anillo fino + cabeza y hombros solo contorno, fondo blanco. */
+/** Icono de perfil: cabeza y hombros solo contorno (sin círculo exterior). */
 function ProfileIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden xmlns="http://www.w3.org/2000/svg">
-      <circle cx="12" cy="12" r="10.25" className="fill-white" />
-      <circle cx="12" cy="12" r="9.15" fill="none" stroke="currentColor" strokeWidth="1.5" />
       <circle cx="12" cy="8.85" r="3.45" fill="none" stroke="currentColor" strokeWidth="1.6" />
       <path
         fill="none"
@@ -67,7 +65,7 @@ export function SiteHeaderAuthLink() {
   if (!ready) {
     return (
       <span className={profileButtonClass} aria-busy="true" aria-label="Comprobando sesión">
-        <ProfileIcon className="h-8 w-8 rounded-full bg-white animate-pulse opacity-40 lg:h-9 lg:w-9" />
+        <ProfileIcon className="h-8 w-8 animate-pulse opacity-40 lg:h-9 lg:w-9" />
       </span>
     );
   }
@@ -75,19 +73,18 @@ export function SiteHeaderAuthLink() {
   if (signedIn) {
     return (
       <Link href="/perfil" aria-label={signedInLabel} className={profileButtonClass}>
-        <ProfileIcon className="h-8 w-8 rounded-full bg-white lg:h-9 lg:w-9" />
+        <ProfileIcon className="h-8 w-8 lg:h-9 lg:w-9" />
       </Link>
     );
   }
 
+  const loginButtonClass =
+    "inline-flex shrink-0 items-center justify-center rounded-full bg-[#822020] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-[#6d1b1b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#822020] sm:px-4 sm:text-sm sm:font-medium";
+
   return (
-    <Link
-      href="/login"
-      aria-label={signedOutLabel}
-      className="inline-flex items-center justify-center rounded-lg p-1.5 text-zinc-700 hover:bg-zinc-100 lg:px-2 lg:py-1 lg:text-sm"
-    >
-      <span className="hidden lg:inline">{signedOutLabel}</span>
-      <span className="text-xs font-semibold text-[#822020] lg:hidden">Entrar</span>
+    <Link href="/login" aria-label={signedOutLabel} className={loginButtonClass}>
+      <span className="hidden sm:inline">{signedOutLabel}</span>
+      <span className="sm:hidden">Entrar</span>
     </Link>
   );
 }

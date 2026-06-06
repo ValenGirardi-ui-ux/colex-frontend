@@ -63,7 +63,7 @@ export function SiteHeader() {
               <svg
                 aria-hidden="true"
                 viewBox="0 0 24 24"
-                className="h-6 w-6 lg:h-8 lg:w-8"
+                className="h-7 w-7 lg:h-[34px] lg:w-[34px]"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
               >
