@@ -61,7 +61,7 @@ create policy "products_update_own"
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
--- Storage: imágenes de publicaciones (públicas para lectura)
+-- Storage: solo imágenes de publicaciones (avatares → bucket `avatars`, banners → `shop-banners`)
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'product-images',

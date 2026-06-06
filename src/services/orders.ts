@@ -50,6 +50,9 @@ function rowToOrder(row: Record<string, unknown>): Order {
       row.buyer_location_label != null ? String(row.buyer_location_label) : null,
     shipping_distance_km:
       row.shipping_distance_km != null ? Number(row.shipping_distance_km) : null,
+    mp_preference_id:
+      row.mp_preference_id != null ? String(row.mp_preference_id) : null,
+    mp_payment_id: row.mp_payment_id != null ? String(row.mp_payment_id) : null,
   };
 }
 

@@ -1,9 +1,13 @@
 export type MessageSender = "me" | "peer";
 
+export type MessageType = "text" | "image";
+
 export type ChatMessage = {
   id: string;
   sender: MessageSender;
   text: string;
+  imageUrl: string | null;
+  messageType: MessageType;
   createdAt: string;
 };
 

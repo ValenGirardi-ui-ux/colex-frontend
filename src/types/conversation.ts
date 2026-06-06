@@ -16,6 +16,8 @@ export type DbMessage = {
   conversation_id: string;
   sender_id: string;
   content: string;
+  image_url: string | null;
+  message_type: "text" | "image";
   created_at: string;
   read_at: string | null;
 };

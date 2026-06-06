@@ -23,6 +23,8 @@ export type Order = {
   created_at: string;
   buyer_location_label?: string | null;
   shipping_distance_km?: number | null;
+  mp_preference_id?: string | null;
+  mp_payment_id?: string | null;
 };
 
 export type OrderInsert = Omit<Order, "id" | "created_at"> & {

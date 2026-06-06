@@ -1,3 +1,4 @@
+import { chatMessagePreviewText } from "@/src/lib/chat-message-preview";
 import { profileDisplayName, profilePeerSubtitle, initialsFromLabel } from "@/src/lib/chat-display";
 import { isProfileVerified } from "@/src/lib/profile-verified";
 import { parseConversationType } from "@/src/lib/conversation-inbox";
@@ -24,12 +25,21 @@ function rowToConversation(row: Record<string, unknown>): DbConversation {
   };
 }
 
+function parseMessageType(raw: unknown): "text" | "image" {
+  return raw === "image" ? "image" : "text";
+}
+
 function rowToMessage(row: Record<string, unknown>): DbMessage {
+  const imageUrl =
+    typeof row.image_url === "string" && row.image_url.trim() ? row.image_url.trim() : null;
+  const messageType = parseMessageType(row.message_type);
   return {
     id: String(row.id),
     conversation_id: String(row.conversation_id),
     sender_id: String(row.sender_id),
-    content: String(row.content),
+    content: typeof row.content === "string" ? row.content : "",
+    image_url: imageUrl,
+    message_type: imageUrl ? "image" : messageType,
     created_at: String(row.created_at),
     read_at: row.read_at != null ? String(row.read_at) : null,
   };
@@ -45,6 +55,9 @@ export function formatConversationErrorForUser(message: string): string {
   }
   if (m.includes("duplicate key") || m.includes("unique")) {
     return "La conversación ya existe.";
+  }
+  if (m.includes("message_type") || m.includes("image_url")) {
+    return "Falta la migración de imágenes en chat. Ejecutá supabase/migrations/20260517000000_chat_images.sql.";
   }
   return message || "No se pudo completar la operación de chat.";
 }
@@ -342,6 +355,8 @@ function mapMessagesToUi(messages: DbMessage[], currentUserId: string): ChatMess
     id: m.id,
     sender: m.sender_id === currentUserId ? "me" : "peer",
     text: m.content,
+    imageUrl: m.image_url,
+    messageType: m.message_type,
     createdAt: m.created_at,
   }));
 }
@@ -351,18 +366,19 @@ function buildUiConversation(
   currentUserId: string,
   peerProfile: ProfileRow | null,
   messages: ChatMessage[],
-  lastPreview: { content: string; createdAt: string } | null,
+  lastPreview: { preview: string; createdAt: string } | null,
 ): Conversation {
   const peerId = row.buyer_id === currentUserId ? row.seller_id : row.buyer_id;
   const peerName = profileDisplayName(peerProfile, "Usuario Colex");
   const peerEmail = profilePeerSubtitle(peerProfile);
 
-  const last = lastPreview ?? (messages.length > 0 ? messages[messages.length - 1] : null);
-  const lastText = last
-    ? "content" in last
-      ? last.content
-      : last.text
-    : null;
+  const lastMsg = messages.length > 0 ? messages[messages.length - 1]! : null;
+  const lastText =
+    lastPreview?.preview ??
+    (lastMsg
+      ? chatMessagePreviewText(lastMsg.text, lastMsg.messageType, lastMsg.imageUrl)
+      : null);
+  const lastAt = lastPreview?.createdAt ?? lastMsg?.createdAt ?? row.updated_at;
 
   return {
     id: row.id,
@@ -375,7 +391,7 @@ function buildUiConversation(
     peerInitials: initialsFromLabel(peerName),
     peerIsVerified: isProfileVerified(peerProfile),
     lastMessage: lastText ?? "Sin mensajes aún",
-    lastMessageAt: last ? last.createdAt : row.updated_at,
+    lastMessageAt: lastAt,
     messages,
   };
 }
@@ -408,17 +424,26 @@ export async function fetchConversationsForUser(
   const convIds = rows.map((r) => r.id);
   const { data: msgRows } = await supabase
     .from("messages")
-    .select("conversation_id, content, created_at")
+    .select("conversation_id, content, message_type, image_url, created_at")
     .in("conversation_id", convIds)
     .order("created_at", { ascending: false });
 
-  const lastByConv = new Map<string, { content: string; createdAt: string }>();
+  const lastByConv = new Map<string, { preview: string; createdAt: string }>();
   for (const raw of msgRows ?? []) {
     const cid = String((raw as { conversation_id: string }).conversation_id);
     if (!lastByConv.has(cid)) {
+      const row = raw as {
+        content: string;
+        message_type?: string;
+        image_url?: string | null;
+        created_at: string;
+      };
+      const imageUrl =
+        typeof row.image_url === "string" && row.image_url.trim() ? row.image_url.trim() : null;
+      const messageType = row.message_type === "image" || imageUrl ? "image" : "text";
       lastByConv.set(cid, {
-        content: String((raw as { content: string }).content),
-        createdAt: String((raw as { created_at: string }).created_at),
+        preview: chatMessagePreviewText(row.content ?? "", messageType, imageUrl),
+        createdAt: String(row.created_at),
       });
     }
   }
@@ -471,16 +496,16 @@ export async function fetchConversationMessages(
   const uiMessages = mapMessagesToUi(messages, userId);
   const peerId = row.buyer_id === userId ? row.seller_id : row.buyer_id;
   const profiles = await fetchProfilesMap([peerId]);
-  const last =
-    uiMessages.length > 0
-      ? {
-          content: uiMessages[uiMessages.length - 1]!.text,
-          createdAt: uiMessages[uiMessages.length - 1]!.createdAt,
-        }
-      : null;
+  const lastMsg = uiMessages.length > 0 ? uiMessages[uiMessages.length - 1]! : null;
+  const lastPreview = lastMsg
+    ? {
+        preview: chatMessagePreviewText(lastMsg.text, lastMsg.messageType, lastMsg.imageUrl),
+        createdAt: lastMsg.createdAt,
+      }
+    : null;
 
   return {
-    conversation: buildUiConversation(row, userId, profiles.get(peerId) ?? null, uiMessages, last),
+    conversation: buildUiConversation(row, userId, profiles.get(peerId) ?? null, uiMessages, lastPreview),
     error: null,
   };
 }
@@ -488,23 +513,30 @@ export async function fetchConversationMessages(
 export type SendMessageInput = {
   conversationId: string;
   senderId: string;
-  content: string;
+  content?: string;
+  imageUrl?: string | null;
 };
 
 export async function sendMessage(
   input: SendMessageInput,
 ): Promise<{ message: ChatMessage | null; error: string | null }> {
-  const content = input.content.trim();
-  if (!content) {
-    return { message: null, error: "Escribí un mensaje." };
+  const content = input.content?.trim() ?? "";
+  const imageUrl = input.imageUrl?.trim() || null;
+
+  if (!content && !imageUrl) {
+    return { message: null, error: "Escribí un mensaje o adjuntá una imagen." };
   }
+
+  const messageType = imageUrl ? "image" : "text";
 
   const { data, error } = await supabase
     .from("messages")
     .insert({
       conversation_id: input.conversationId,
       sender_id: input.senderId,
-      content,
+      content: content || "",
+      image_url: imageUrl,
+      message_type: messageType,
     })
     .select("*")
     .single();
@@ -530,7 +562,7 @@ export async function sendMessage(
         void notifyRecipientNewMessage({
           recipientId,
           productTitle: conv.product_title || "Producto",
-          preview: row.content,
+          preview: chatMessagePreviewText(row.content, row.message_type, row.image_url),
         });
       }
     }
@@ -541,6 +573,8 @@ export async function sendMessage(
       id: row.id,
       sender: "me",
       text: row.content,
+      imageUrl: row.image_url,
+      messageType: row.message_type,
       createdAt: row.created_at,
     },
     error: null,

@@ -1,6 +1,10 @@
 import { supabase } from "@/src/lib/supabase/client";
 
-const BUCKET = "product-images";
+const AVATARS_BUCKET = "avatars";
+const SHOP_BANNERS_BUCKET = "shop-banners";
+
+const MIGRATION_HINT =
+  "Faltan los buckets avatars/shop-banners en Supabase. Ejecutá supabase/migrations/20260516800000_profile_storage_buckets.sql.";
 
 function fileExtension(file: File): string {
   const fromName = file.name.split(".").pop()?.toLowerCase();
@@ -13,8 +17,41 @@ function fileExtension(file: File): string {
   return "jpg";
 }
 
+function bucketNotFoundMessage(bucket: string, message: string): string | null {
+  const msg = message.toLowerCase();
+  if (msg.includes("bucket") && msg.includes("not found")) {
+    return MIGRATION_HINT;
+  }
+  if (msg.includes(bucket) && (msg.includes("does not exist") || msg.includes("not found"))) {
+    return MIGRATION_HINT;
+  }
+  return null;
+}
+
+async function uploadProfileImage(
+  bucket: string,
+  path: string,
+  file: File,
+): Promise<{ url: string | null; error: string | null }> {
+  const ext = fileExtension(file);
+  const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file, {
+    cacheControl: "3600",
+    upsert: true,
+    contentType: file.type || `image/${ext}`,
+  });
+
+  if (uploadError) {
+    const hint = bucketNotFoundMessage(bucket, uploadError.message);
+    return { url: null, error: hint ?? uploadError.message };
+  }
+
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+  return { url: data.publicUrl ?? null, error: null };
+}
+
 /**
- * Logo del negocio en `{userId}/avatar.{ext}` (bucket product-images, upsert).
+ * Avatar o logo en `{userId}/avatar.{ext}` (bucket `avatars`).
+ * La URL pública se guarda en `profiles.avatar_url`.
  */
 export async function uploadBusinessLogo(
   userId: string,
@@ -22,53 +59,26 @@ export async function uploadBusinessLogo(
 ): Promise<{ url: string | null; error: string | null }> {
   const ext = fileExtension(file);
   const path = `${userId}/avatar.${ext}`;
-
-  const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file, {
-    cacheControl: "3600",
-    upsert: true,
-    contentType: file.type || `image/${ext}`,
-  });
-
-  if (uploadError) {
-    const msg = uploadError.message.toLowerCase();
-    if (msg.includes("bucket") && msg.includes("not found")) {
-      return {
-        url: null,
-        error: "Falta el bucket product-images en Supabase. Ejecutá supabase/products-setup.sql.",
-      };
-    }
-    return { url: null, error: uploadError.message };
-  }
-
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  return { url: data.publicUrl ?? null, error: null };
+  return uploadProfileImage(AVATARS_BUCKET, path, file);
 }
 
-/** Banner de tienda en `{userId}/shop-banner.{ext}`. */
+/** Alias semántico para foto de perfil (mismo bucket y ruta que el logo). */
+export async function uploadProfileAvatar(
+  userId: string,
+  file: File,
+): Promise<{ url: string | null; error: string | null }> {
+  return uploadBusinessLogo(userId, file);
+}
+
+/**
+ * Banner de tienda en `{userId}/shop-banner.{ext}` (bucket `shop-banners`).
+ * La URL pública se guarda en `profiles.shop_banner_url`.
+ */
 export async function uploadShopBanner(
   userId: string,
   file: File,
 ): Promise<{ url: string | null; error: string | null }> {
   const ext = fileExtension(file);
   const path = `${userId}/shop-banner.${ext}`;
-
-  const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file, {
-    cacheControl: "3600",
-    upsert: true,
-    contentType: file.type || `image/${ext}`,
-  });
-
-  if (uploadError) {
-    const msg = uploadError.message.toLowerCase();
-    if (msg.includes("bucket") && msg.includes("not found")) {
-      return {
-        url: null,
-        error: "Falta el bucket product-images en Supabase. Ejecutá supabase/products-setup.sql.",
-      };
-    }
-    return { url: null, error: uploadError.message };
-  }
-
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  return { url: data.publicUrl ?? null, error: null };
+  return uploadProfileImage(SHOP_BANNERS_BUCKET, path, file);
 }

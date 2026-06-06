@@ -10,6 +10,7 @@ import {
   sendMessage,
 } from "@/src/services/conversations";
 import { supabase } from "@/src/lib/supabase/client";
+import { chatMessagePreviewText } from "@/src/lib/chat-message-preview";
 import type { Conversation } from "@/src/types/messages";
 
 export const messagesQueryKeys = {
@@ -71,17 +72,24 @@ export function useSendMessageMutation(userId: string | null | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: { conversationId: string; content: string }) => {
+    mutationFn: async (input: {
+      conversationId: string;
+      content?: string;
+      imageUrl?: string | null;
+    }) => {
       const { message, error } = await sendMessage({
         conversationId: input.conversationId,
         senderId: userId!,
         content: input.content,
+        imageUrl: input.imageUrl,
       });
       if (error || !message) throw new Error(error ?? "No se pudo enviar el mensaje.");
       return { message, conversationId: input.conversationId };
     },
     onSuccess: ({ message, conversationId }) => {
       if (!userId) return;
+
+      const preview = chatMessagePreviewText(message.text, message.messageType, message.imageUrl);
 
       queryClient.setQueryData<Conversation>(
         messagesQueryKeys.thread(userId, conversationId),
@@ -90,7 +98,7 @@ export function useSendMessageMutation(userId: string | null | undefined) {
           return {
             ...old,
             messages: [...old.messages, message],
-            lastMessage: message.text,
+            lastMessage: preview,
             lastMessageAt: message.createdAt,
           };
         },

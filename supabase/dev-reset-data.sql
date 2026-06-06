@@ -111,14 +111,11 @@ end $$;
 -- -----------------------------------------------------------------------------
 -- OPCIONAL: limpiar imágenes de publicaciones en Storage
 -- -----------------------------------------------------------------------------
--- El bucket product-images también guarda avatar.* y banner.* de perfiles.
+-- Avatares/logos: bucket `avatars`. Banners de tienda: bucket `shop-banners`.
+-- Imágenes de publicaciones: bucket `product-images` (solo productos).
 -- NO descomentes el bloque siguiente si no querés tocar archivos de Storage.
--- Si lo usás, solo borra objetos que NO sean avatar ni banner.
 --
--- delete from storage.objects
--- where bucket_id = 'product-images'
---   and not (name ~ '(^|/)avatar\.(jpe?g|png|webp|gif)$')
---   and not (name ~ '(^|/)banner\.(jpe?g|png|webp|gif)$');
+-- delete from storage.objects where bucket_id = 'product-images';
 --
 -- -----------------------------------------------------------------------------
 -- OPCIONAL: resetear flags de prueba en perfiles (desactivado por defecto)

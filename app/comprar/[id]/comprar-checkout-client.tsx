@@ -4,21 +4,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { BuyerDeliverySelector } from "@/app/components/checkout/buyer-delivery-selector";
-import { CheckoutCardPaymentForm } from "@/app/components/checkout/checkout-card-payment-form";
+import { CheckoutMercadoPagoSection } from "@/app/components/checkout/checkout-mercadopago-section";
 import { CheckoutTotalsSummary } from "@/app/components/checkout/checkout-totals-summary";
 import { SiteHeader } from "@/app/components/site-header";
-import { completeCheckoutPurchase } from "@/src/lib/complete-checkout-purchase";
-import {
-  type CardPaymentErrors,
-  type CardPaymentFields,
-  processMockCardPayment,
-  validateCardPayment,
-} from "@/src/lib/card-payment-validation";
 import { computeCheckoutTotals, resolveBuyerDeliveryChoice } from "@/src/lib/checkout";
 import { getDeliveryMethodDisplay } from "@/src/lib/delivery-method";
 import { formatArsPrice } from "@/src/lib/money";
 import { formatProductCondition } from "@/src/lib/product-condition";
 import { supabase } from "@/src/lib/supabase/client";
+import { getOrCreateOrderForCheckout } from "@/src/services/orders";
 import type { BuyerDeliveryChoice } from "@/src/types/order";
 import type { Product } from "@/src/types/product";
 
@@ -26,19 +20,10 @@ type ComprarCheckoutClientProps = {
   product: Product;
 };
 
-const INITIAL_CARD: CardPaymentFields = {
-  holderName: "",
-  cardNumber: "",
-  expiration: "",
-  cvv: "",
-};
-
 export function ComprarCheckoutClient({ product }: ComprarCheckoutClientProps) {
   const router = useRouter();
   const [buyerDelivery, setBuyerDelivery] = useState<BuyerDeliveryChoice | "">("coordinar_vendedor");
   const [buyerLocalityId, setBuyerLocalityId] = useState("");
-  const [card, setCard] = useState<CardPaymentFields>(INITIAL_CARD);
-  const [cardErrors, setCardErrors] = useState<CardPaymentErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -60,12 +45,6 @@ export function ComprarCheckoutClient({ product }: ComprarCheckoutClientProps) {
     resolvedDelivery === "envio_domicilio" && !buyerLocalityId && !totals.shippingError;
   const canPay = !shippingPending && !totals.shippingError;
 
-  function updateCard(field: keyof CardPaymentFields, value: string) {
-    setCard((prev) => ({ ...prev, [field]: value }));
-    setCardErrors((prev) => ({ ...prev, [field]: undefined }));
-    setSubmitError(null);
-  }
-
   async function handlePayAndContinue(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitError(null);
@@ -81,10 +60,6 @@ export function ComprarCheckoutClient({ product }: ComprarCheckoutClientProps) {
       }
     }
 
-    const paymentErrors = validateCardPayment(card);
-    setCardErrors(paymentErrors);
-    if (Object.keys(paymentErrors).length > 0) return;
-
     setSubmitting(true);
     try {
       const {
@@ -95,13 +70,7 @@ export function ComprarCheckoutClient({ product }: ComprarCheckoutClientProps) {
         return;
       }
 
-      const payment = await processMockCardPayment();
-      if (!payment.ok) {
-        setSubmitError(payment.error);
-        return;
-      }
-
-      const result = await completeCheckoutPurchase({
+      const { order, error: orderError } = await getOrCreateOrderForCheckout({
         buyerId: session.user.id,
         product,
         buyerDelivery: resolvedDelivery,
@@ -109,15 +78,43 @@ export function ComprarCheckoutClient({ product }: ComprarCheckoutClientProps) {
         totalAmount: totals.total,
         buyerLocationLabel: totals.buyerLocationLabel,
         shippingDistanceKm: totals.distanceKm,
-        phase: "paid",
+        phase: "start",
       });
 
-      if (result.error || !result.redirectHref) {
-        setSubmitError(result.error ?? "No se pudo completar la compra.");
+      if (orderError && !order) {
+        setSubmitError(orderError);
+        return;
+      }
+      if (!order?.id || order.id.startsWith("local-")) {
+        setSubmitError(
+          orderError ?? "No se pudo registrar la orden. Revisá la conexión con Supabase.",
+        );
         return;
       }
 
-      router.push(result.redirectHref);
+      const prefRes = await fetch("/api/mercadopago/create-preference", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: order.id }),
+      });
+
+      const prefData = (await prefRes.json()) as { initPoint?: string; error?: string };
+
+      if (!prefRes.ok || !prefData.initPoint) {
+        const msg = prefData.error ?? "No se pudo iniciar el pago con Mercado Pago.";
+        if (prefRes.status === 503) {
+          setSubmitError(
+            `${msg} Configurá MERCADOPAGO_ACCESS_TOKEN y SUPABASE_SERVICE_ROLE_KEY en el servidor.`,
+          );
+        } else {
+          setSubmitError(msg);
+        }
+        return;
+      }
+
+      window.location.href = prefData.initPoint;
+    } catch {
+      setSubmitError("No se pudo conectar con el servidor de pagos. Intentá de nuevo.");
     } finally {
       setSubmitting(false);
     }
@@ -148,7 +145,7 @@ export function ComprarCheckoutClient({ product }: ComprarCheckoutClientProps) {
             <div>
               <h1 className="text-xl font-bold text-zinc-900 sm:text-2xl">Finalizá tu compra</h1>
               <p className="mt-1 text-sm text-zinc-600">
-                Elegí entrega, pagá con tarjeta y coordiná con el vendedor en Ventas.
+                Elegí entrega y pagá con Mercado Pago. La compra se confirma cuando el pago es aprobado.
               </p>
             </div>
 
@@ -185,12 +182,7 @@ export function ComprarCheckoutClient({ product }: ComprarCheckoutClientProps) {
               orderTotal={totals.total}
             />
 
-            <CheckoutCardPaymentForm
-              values={card}
-              errors={cardErrors}
-              disabled={submitting}
-              onChange={updateCard}
-            />
+            <CheckoutMercadoPagoSection disabled={!canPay || submitting} />
           </div>
 
           <aside className="h-fit space-y-4 lg:sticky lg:top-24">
@@ -249,11 +241,11 @@ export function ComprarCheckoutClient({ product }: ComprarCheckoutClientProps) {
                 disabled={submitting || !canPay}
                 className="mt-4 flex h-12 w-full items-center justify-center rounded-full bg-[#822020] text-sm font-semibold text-white transition hover:bg-[#6d1b1b] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {submitting ? "Procesando pago…" : `Pagar y continuar · ${formatArsPrice(totals.total)}`}
+                {submitting ? "Preparando pago…" : `Pagar con Mercado Pago · ${formatArsPrice(totals.total)}`}
               </button>
 
               <p className="text-center text-[11px] text-zinc-400">
-                Al continuar se crea tu orden y el chat de venta con el vendedor.
+                Se crea una orden pendiente y te redirigimos a Mercado Pago. El chat de venta se abre al confirmar el pago.
               </p>
             </div>
 

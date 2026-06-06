@@ -17,6 +17,7 @@ import {
 } from "@/src/lib/conversation-inbox";
 import { ChatConversationPanel } from "@/app/mensajes/chat-conversation-panel";
 import { VerifiedName } from "@/app/components/verified-badge";
+import { uploadChatImage } from "@/src/services/chat-images";
 import { getProductById } from "@/src/services/products";
 import type { Conversation } from "@/src/types/messages";
 
@@ -71,6 +72,10 @@ export function MensajesInbox() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [inboxTab, setInboxTab] = useState<MessagesInboxTab>(() => parseInboxTab(tabParam));
   const [draft, setDraft] = useState("");
+  const [pendingImageUrl, setPendingImageUrl] = useState<string | null>(null);
+  const [pendingImageName, setPendingImageName] = useState<string | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [attachError, setAttachError] = useState<string | null>(null);
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
   const [urlError, setUrlError] = useState<string | null>(null);
   const [urlHandled, setUrlHandled] = useState(false);
@@ -210,6 +215,9 @@ export function MensajesInbox() {
     setActiveId(id);
     setMobileView("chat");
     setUrlError(null);
+    setPendingImageUrl(null);
+    setPendingImageName(null);
+    setAttachError(null);
     const conv = conversations.find((c) => c.id === id);
     if (conv) {
       setInboxTab(inboxTabForConversation(conv));
@@ -226,17 +234,45 @@ export function MensajesInbox() {
     el.scrollTop = el.scrollHeight;
   }, [active?.id, active?.messages.length, threadLoading]);
 
+  const attachImage = useCallback(
+    async (file: File) => {
+      if (!activeId || !userId || imageUploading) return;
+      setAttachError(null);
+      setImageUploading(true);
+      const { url, error } = await uploadChatImage(activeId, userId, file);
+      setImageUploading(false);
+      if (error || !url) {
+        setAttachError(error ?? "No se pudo subir la imagen.");
+        return;
+      }
+      setPendingImageUrl(url);
+      setPendingImageName(file.name);
+    },
+    [activeId, userId, imageUploading],
+  );
+
   const send = useCallback(() => {
     const t = draft.trim();
-    if (!t || !activeId || !userId || sendMessageMutation.isPending) return;
+    if ((!t && !pendingImageUrl) || !activeId || !userId || sendMessageMutation.isPending || imageUploading) {
+      return;
+    }
     sendMessageMutation.mutate(
-      { conversationId: activeId, content: t },
       {
-        onSuccess: () => setDraft(""),
+        conversationId: activeId,
+        content: t || undefined,
+        imageUrl: pendingImageUrl,
+      },
+      {
+        onSuccess: () => {
+          setDraft("");
+          setPendingImageUrl(null);
+          setPendingImageName(null);
+          setAttachError(null);
+        },
         onError: () => {},
       },
     );
-  }, [draft, activeId, userId, sendMessageMutation]);
+  }, [draft, pendingImageUrl, activeId, userId, sendMessageMutation, imageUploading]);
 
   const loading = sessionLoading || (Boolean(userId) && inboxLoading && !urlHandled);
 
@@ -366,9 +402,22 @@ export function MensajesInbox() {
               draft={draft}
               threadLoading={threadLoading}
               sendPending={sendMessageMutation.isPending}
+              imageUploading={imageUploading}
+              attachError={attachError}
+              pendingImageUrl={pendingImageUrl}
+              pendingImageName={pendingImageName}
               messagesScrollRef={messagesScrollRef}
-              onDraftChange={setDraft}
+              onDraftChange={(value) => {
+                setDraft(value);
+                setAttachError(null);
+              }}
               onSend={send}
+              onAttachImage={(file) => void attachImage(file)}
+              onClearPendingImage={() => {
+                setPendingImageUrl(null);
+                setPendingImageName(null);
+                setAttachError(null);
+              }}
               onBack={onBack}
             />
           ) : (
