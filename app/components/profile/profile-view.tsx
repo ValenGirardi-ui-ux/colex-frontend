@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { StartPeerConversationButton } from "@/app/components/start-peer-conversation-button";
 import { FollowStoreButton } from "@/app/components/shop/follow-store-button";
-import { ProfileDraftsList } from "@/app/components/profile/profile-drafts-list";
 import { ProfilePublicacionesOwn } from "@/app/components/profile/profile-publicaciones-own";
 import { ProfileHeaderStats } from "@/app/components/profile/profile-header-stats";
 import { ProductListGrid } from "@/app/components/product-list-grid";
@@ -18,15 +17,10 @@ import type { Product } from "@/src/types/product";
 import type { MockPublicProfile } from "@/src/data/mockProfiles";
 import { initialsFromName } from "@/src/data/mockProfiles";
 
-export type ProfileTabKey =
-  | "publicaciones"
-  | "borradores"
-  | "favoritos"
-  | "informacion";
+export type ProfileTabKey = "publicaciones" | "favoritos" | "informacion";
 
 const TAB_ITEMS: Array<{ key: ProfileTabKey; label: string }> = [
   { key: "publicaciones", label: "Publicaciones" },
-  { key: "borradores", label: "Borradores" },
   { key: "favoritos", label: "Favoritos" },
   { key: "informacion", label: "Información" },
 ];
@@ -34,13 +28,11 @@ const TAB_ITEMS: Array<{ key: ProfileTabKey; label: string }> = [
 export type ProfileViewProps = {
   profile: MockPublicProfile;
   listings: Product[];
-  drafts?: Product[];
   favorites: Product[];
   isOwnProfile: boolean;
   activeTab: ProfileTabKey;
   /** Ruta sin query, p. ej. `/perfil` o `/perfil/seller-lucia` */
   basePath: string;
-  onDraftsChanged?: () => void;
   onListingsChanged?: () => void;
   userId?: string | null;
   buyerOrders?: Order[];
@@ -121,12 +113,10 @@ function IconSettings() {
 export function ProfileView({
   profile,
   listings,
-  drafts = [],
   favorites,
   isOwnProfile,
   activeTab,
   basePath,
-  onDraftsChanged,
   onListingsChanged,
   userId,
   buyerOrders = [],
@@ -142,9 +132,7 @@ export function ProfileView({
   const shopHref = shopSlug ? premiumShopPath(shopSlug) : null;
   const hrefTab = (key: ProfileTabKey) => (key === "publicaciones" ? basePath : `${basePath}?tab=${key}`);
   const pubCount = listings.length;
-  const visibleTabs = isOwnProfile
-    ? TAB_ITEMS
-    : TAB_ITEMS.filter((t) => t.key !== "borradores");
+  const visibleTabs = TAB_ITEMS;
 
   const actionLabel = isOwnProfile ? "Editar perfil" : "Enviar mensaje";
   const primaryActionClassName =
@@ -306,14 +294,6 @@ export function ProfileView({
               )
             ) : null}
 
-            {activeTab === "borradores" && isOwnProfile ? (
-              userId && onDraftsChanged ? (
-                <ProfileDraftsList drafts={drafts} userId={userId} onChanged={onDraftsChanged} />
-              ) : (
-                <p className="py-6 text-center text-base text-zinc-600">Cargando borradores…</p>
-              )
-            ) : null}
-
             {activeTab === "favoritos" ? (
               !isOwnProfile ? (
                 <FavoritosPrivados />
@@ -396,7 +376,7 @@ export function ProfileView({
 }
 
 export function parseProfileTab(tab: string | undefined): ProfileTabKey {
-  if (tab === "favoritos" || tab === "informacion" || tab === "borradores") {
+  if (tab === "favoritos" || tab === "informacion") {
     return tab;
   }
   return "publicaciones";

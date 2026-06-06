@@ -8,8 +8,6 @@ export function listingStatusLabel(status: ProductStatus): string {
       return "Pausada";
     case "sold":
       return "Vendida";
-    case "draft":
-      return "Borrador";
     default:
       return status;
   }

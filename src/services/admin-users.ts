@@ -1,8 +1,7 @@
 "use server";
 
 import { displayNameFromEmail } from "@/src/lib/auth-profile";
-import { adminConfigError, isColexAdminUser } from "@/src/lib/admin";
-import { getSessionUser } from "@/src/lib/admin-guard";
+import { assertAdminAction } from "@/src/lib/admin-action";
 import { createServiceRoleClient } from "@/src/lib/supabase/admin-service";
 import type { AdminCreateUserInput, AdminUserRow } from "@/src/types/admin";
 import type { ProfileRow } from "@/src/types/profile";
@@ -11,16 +10,6 @@ const ADMIN_PROFILE_SELECT =
   "id,email,username,full_name,is_premium,is_featured,shop_slug,created_at" as const;
 
 type ActionResult<T> = { data: T; error: string | null };
-
-async function assertAdminAction(): Promise<void> {
-  const configErr = adminConfigError();
-  if (configErr) throw new Error(configErr);
-
-  const user = await getSessionUser();
-  if (!user || !isColexAdminUser(user)) {
-    throw new Error("No autorizado.");
-  }
-}
 
 function rowToAdminUser(row: ProfileRow): AdminUserRow {
   return {

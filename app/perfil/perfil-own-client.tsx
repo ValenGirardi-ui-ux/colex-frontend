@@ -13,7 +13,7 @@ import { ensureProfileForUser } from "@/src/services/profiles";
 import { fetchOrdersForBuyer, fetchSellerSalesPanel } from "@/src/services/orders";
 import { fetchReviewSummaryForUser } from "@/src/services/reviews";
 import type { ReviewSummary } from "@/src/types/review";
-import { getDraftsByUserId, getSellerManageableListingsByUserId } from "@/src/services/products";
+import { getSellerManageableListingsByUserId } from "@/src/services/products";
 import type { User } from "@supabase/supabase-js";
 import type { Order, SellerOrderRow } from "@/src/types/order";
 import type { Product } from "@/src/types/product";
@@ -29,7 +29,6 @@ export function PerfilOwnClient() {
   const [user, setUser] = useState<User | null>(null);
   const [profileRow, setProfileRow] = useState<ProfileRow | null>(null);
   const [listings, setListings] = useState<Product[]>([]);
-  const [drafts, setDrafts] = useState<Product[]>([]);
   const [favorites, setFavorites] = useState<Product[]>([]);
   const [buyerOrders, setBuyerOrders] = useState<Order[]>([]);
   const [sellerSalesRows, setSellerSalesRows] = useState<SellerOrderRow[]>([]);
@@ -47,7 +46,6 @@ export function PerfilOwnClient() {
         setUser(null);
         setProfileRow(null);
         setListings([]);
-        setDrafts([]);
         setFavorites([]);
         setBuyerOrders([]);
         setSellerSalesRows([]);
@@ -58,11 +56,10 @@ export function PerfilOwnClient() {
       setPhase("loading");
       setUser(next);
 
-      const [{ profile: prof }, products, draftRows, favResult, buyerResult, sellerResult, reviewsSum] =
+      const [{ profile: prof }, products, favResult, buyerResult, sellerResult, reviewsSum] =
         await Promise.all([
           ensureProfileForUser(next),
           getSellerManageableListingsByUserId(next.id),
-          getDraftsByUserId(next.id),
           fetchFavoriteProducts(next.id),
           fetchOrdersForBuyer(next.id),
           fetchSellerSalesPanel(next.id),
@@ -72,7 +69,6 @@ export function PerfilOwnClient() {
       if (cancelled) return;
       setProfileRow(prof);
       setListings(products);
-      setDrafts(draftRows);
       setFavorites(favResult.error ? [] : favResult.products);
       setBuyerOrders(buyerResult.orders);
       setSellerSalesRows(sellerResult.rows);
@@ -106,11 +102,6 @@ export function PerfilOwnClient() {
       cancelled = true;
     };
   }, [phase, user?.id, favReady, favoriteIdsKey]);
-
-  const refreshDrafts = () => {
-    if (!user?.id) return;
-    void getDraftsByUserId(user.id).then(setDrafts);
-  };
 
   const refreshListings = () => {
     if (!user?.id) return;
@@ -169,13 +160,11 @@ export function PerfilOwnClient() {
         <ProfileView
           profile={profile}
           listings={listings}
-          drafts={drafts}
           favorites={favorites}
           isOwnProfile
           activeTab={activeTab}
           basePath="/perfil"
           userId={user.id}
-          onDraftsChanged={refreshDrafts}
           onListingsChanged={refreshListings}
           buyerOrders={buyerOrders}
           sellerSalesRows={sellerSalesRows}

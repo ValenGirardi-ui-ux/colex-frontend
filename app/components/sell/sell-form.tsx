@@ -1,25 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { SELL_CATEGORIES } from "@/src/data/categories";
 import {
   normalizeSellDeliveryForForm,
   parseDeliveryMethodForPublish,
   SELL_DELIVERY_OPTIONS,
 } from "@/src/lib/delivery-method";
-import {
-  clearLocalSellDraft,
-  dataUrlToFile,
-  fileToDataUrl,
-  readLocalSellDraft,
-  writeLocalSellDraft,
-  type SellDraftPhotoStored,
-  type SellDraftSnapshot,
-} from "@/src/lib/sell-draft";
 import { supabase } from "@/src/lib/supabase/client";
-import { publishExistingDraft, saveProductDraft } from "@/src/services/product-drafts";
 import { getOwnProductById } from "@/src/services/products";
 import { updatePublishedListing } from "@/src/services/listing-management";
 import { publishProduct } from "@/src/services/publish-product";
@@ -48,7 +38,6 @@ const inputClass =
   "w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-[#822020] focus:ring-2 focus:ring-[#822020]/20 sm:py-3.5 sm:text-base";
 const labelClass = "text-sm font-medium text-zinc-800";
 const errorTextClass = "text-sm text-red-600";
-const AUTOSAVE_MS = 1400;
 
 function parsePriceToPositiveInteger(raw: string): number | null {
   const digits = raw.replace(/[^\d]/g, "");
@@ -58,43 +47,6 @@ function parsePriceToPositiveInteger(raw: string): number | null {
   return n;
 }
 
-function parsePriceDigits(raw: string): number {
-  const digits = raw.replace(/[^\d]/g, "");
-  if (!digits) return 0;
-  const n = parseInt(digits, 10);
-  return Number.isFinite(n) ? Math.max(0, n) : 0;
-}
-
-function hasFormContent(fields: {
-  title: string;
-  description: string;
-  category: string;
-  condition: string;
-  price: string;
-  brand: string;
-  institution: string;
-  sizeLabel: string;
-  location: string;
-  delivery: string;
-  photoCount: number;
-  remoteCount: number;
-}): boolean {
-  return (
-    fields.title.trim().length > 0 ||
-    fields.description.trim().length > 0 ||
-    fields.category.length > 0 ||
-    fields.condition.length > 0 ||
-    fields.price.replace(/[^\d]/g, "").length > 0 ||
-    fields.brand.trim().length > 0 ||
-    fields.institution.trim().length > 0 ||
-    fields.sizeLabel.trim().length > 0 ||
-    fields.location.trim().length > 0 ||
-    fields.delivery.length > 0 ||
-    fields.photoCount > 0 ||
-    fields.remoteCount > 0
-  );
-}
-
 type SellFormProps = {
   /** Editar publicación activa o pausada del vendedor. */
   editProductId?: string;
@@ -102,16 +54,14 @@ type SellFormProps = {
 
 export function SellForm({ editProductId }: SellFormProps = {}) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const isEditMode = Boolean(editProductId);
   const formId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [authReady, setAuthReady] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
-  const [draftId, setDraftId] = useState<string | null>(null);
   const [remoteImageUrls, setRemoteImageUrls] = useState<string[]>([]);
-  const [draftLoadDone, setDraftLoadDone] = useState(false);
+  const [formLoadDone, setFormLoadDone] = useState(false);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -129,13 +79,6 @@ export function SellForm({ editProductId }: SellFormProps = {}) {
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
-  const [savingDraft, setSavingDraft] = useState(false);
-  const [draftNotice, setDraftNotice] = useState<string | null>(null);
-  const [draftError, setDraftError] = useState<string | null>(null);
-
-  const skipAutosaveRef = useRef(true);
-  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const draftSaveInFlightRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -174,411 +117,54 @@ export function SellForm({ editProductId }: SellFormProps = {}) {
     items.forEach((p) => URL.revokeObjectURL(p.previewUrl));
   };
 
-  const applySnapshot = useCallback(async (snapshot: SellDraftSnapshot, nextDraftId: string | null) => {
-    skipAutosaveRef.current = true;
-    setDraftId(nextDraftId);
-    setTitle(snapshot.title);
-    setDescription(snapshot.description);
-    setCategory(snapshot.category);
-    setCondition(snapshot.condition);
-    setNewCondition(snapshot.newCondition);
-    setUsedCondition(snapshot.usedCondition);
-    setPrice(snapshot.price);
-    setBrand(snapshot.brand);
-    setInstitution(snapshot.institution);
-    setSizeLabel(snapshot.sizeLabel);
-    setLocation(snapshot.location);
-    setDelivery(normalizeSellDeliveryForForm(snapshot.delivery) || "ambos");
-    setRemoteImageUrls(snapshot.imageUrls);
-
-    setPhotos((prev) => {
-      revokeList(prev);
-      return [];
-    });
-
-    if (snapshot.localPhotos.length > 0) {
-      const loaded: PhotoItem[] = [];
-      for (const stored of snapshot.localPhotos) {
-        try {
-          const file = await dataUrlToFile(stored.dataUrl, stored.name);
-          loaded.push({
-            id: stored.id,
-            file,
-            previewUrl: URL.createObjectURL(file),
-          });
-        } catch {
-          // omit corrupt photo
-        }
-      }
-      setPhotos(loaded);
-    }
-
-    window.setTimeout(() => {
-      skipAutosaveRef.current = false;
-    }, 0);
-  }, []);
-
   useEffect(() => {
     if (!authReady) return;
 
     let cancelled = false;
 
-    async function loadDraft() {
-      skipAutosaveRef.current = true;
-
-      if (isEditMode && editProductId && userId) {
-        const product = await getOwnProductById(editProductId, userId);
-        if (cancelled) return;
-        if (
-          product &&
-          (product.status === "active" || product.status === "paused")
-        ) {
-          await applySnapshot(
-            {
-              version: 1,
-              id: product.id,
-              updatedAt: new Date().toISOString(),
-              title: product.title,
-              description: product.description ?? "",
-              category: product.category === "Otros" ? "" : product.category,
-              condition:
-                product.condition === "nuevo" || product.condition === "usado"
-                  ? product.condition
-                  : "",
-              newCondition: product.new_condition ?? "",
-              usedCondition: product.used_condition ?? "",
-              price: String(product.price),
-              brand: product.brand ?? "",
-              institution: product.institution ?? "",
-              sizeLabel: product.size ?? "",
-              location: product.location === "No indicada" ? "" : product.location,
-              delivery: product.delivery_method ?? "",
-              imageUrls: product.images ?? [],
-              localPhotos: [],
-            },
-            null,
-          );
-          setDraftLoadDone(true);
-          return;
-        }
-        setSubmitError("No encontramos esta publicación para editar.");
-        setDraftLoadDone(true);
+    async function loadForm() {
+      if (!isEditMode || !editProductId || !userId) {
+        if (!cancelled) setFormLoadDone(true);
         return;
       }
 
-      const borradorParam = searchParams.get("borrador");
+      const product = await getOwnProductById(editProductId, userId);
+      if (cancelled) return;
 
-      if (userId && borradorParam) {
-        const product = await getOwnProductById(borradorParam, userId);
-        if (cancelled) return;
-        if (product && product.status === "draft") {
-          await applySnapshot(
-            {
-              version: 1,
-              id: product.id,
-              updatedAt: new Date().toISOString(),
-              title: product.title === "Sin título" ? "" : product.title,
-              description: product.description ?? "",
-              category: product.category === "Otros" ? "" : product.category,
-              condition:
-                product.condition === "nuevo" || product.condition === "usado" ? product.condition : "",
-              newCondition: product.new_condition ?? "",
-              usedCondition: product.used_condition ?? "",
-              price: product.price > 0 ? String(product.price) : "",
-              brand: product.brand ?? "",
-              institution: product.institution ?? "",
-              sizeLabel: product.size ?? "",
-              location: product.location === "No indicada" ? "" : product.location,
-              delivery: product.delivery_method ?? "",
-              imageUrls: product.images ?? [],
-              localPhotos: [],
-            },
-            product.id,
-          );
-          setDraftLoadDone(true);
-          return;
-        }
-      }
-
-      if (!userId) {
-        const local = readLocalSellDraft();
-        if (cancelled) return;
-        if (local) {
-          await applySnapshot(local, null);
-        } else {
-          skipAutosaveRef.current = false;
-        }
-        setDraftLoadDone(true);
-        return;
-      }
-
-      if (!borradorParam) {
-        const local = readLocalSellDraft();
-        if (cancelled) return;
-        if (local && hasFormContent({
-          title: local.title,
-          description: local.description,
-          category: local.category,
-          condition: local.condition,
-          price: local.price,
-          brand: local.brand,
-          institution: local.institution,
-          sizeLabel: local.sizeLabel,
-          location: local.location,
-          delivery: local.delivery,
-          photoCount: local.localPhotos.length,
-          remoteCount: local.imageUrls.length,
-        })) {
-          await applySnapshot(local, null);
-        } else {
-          skipAutosaveRef.current = false;
-        }
-      } else {
-        skipAutosaveRef.current = false;
-      }
-
-      setDraftLoadDone(true);
-    }
-
-    void loadDraft();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [authReady, userId, searchParams, applySnapshot, isEditMode, editProductId]);
-
-  const buildSnapshot = useCallback(async (): Promise<SellDraftSnapshot> => {
-    const localPhotos: SellDraftPhotoStored[] = [];
-    for (const p of photos) {
-      try {
-        const dataUrl = await fileToDataUrl(p.file);
-        localPhotos.push({ id: p.id, dataUrl, name: p.file.name || "foto.jpg" });
-      } catch {
-        // skip
-      }
-    }
-
-    return {
-      version: 1,
-      id: draftId ?? "local",
-      updatedAt: new Date().toISOString(),
-      title,
-      description,
-      category,
-      condition,
-      newCondition,
-      usedCondition,
-      price,
-      brand,
-      institution,
-      sizeLabel,
-      location,
-      delivery,
-      imageUrls: remoteImageUrls,
-      localPhotos,
-    };
-  }, [
-    brand,
-    category,
-    condition,
-    delivery,
-    description,
-    draftId,
-    institution,
-    location,
-    newCondition,
-    photos,
-    price,
-    remoteImageUrls,
-    sizeLabel,
-    title,
-    usedCondition,
-  ]);
-
-  const persistDraft = useCallback(
-    async (opts?: { silent?: boolean; requireAuth?: boolean }): Promise<boolean> => {
-      const silent = opts?.silent ?? false;
-      const requireAuth = opts?.requireAuth ?? false;
-
-      if (requireAuth && !userId) {
-        setDraftError("Iniciá sesión para guardar el borrador en tu cuenta.");
-        setDraftNotice(null);
-        return false;
-      }
-
-      if (draftSaveInFlightRef.current) {
-        return false;
-      }
-
-      const content = hasFormContent({
-        title,
-        description,
-        category,
-        condition,
-        price,
-        brand,
-        institution,
-        sizeLabel,
-        location,
-        delivery,
-        photoCount: photos.length,
-        remoteCount: remoteImageUrls.length,
-      });
-
-      if (!content) {
-        if (!silent) {
-          setDraftNotice(null);
-          setDraftError("Completá al menos un campo para guardar el borrador.");
-        }
-        return false;
-      }
-
-      if (!silent) {
-        setSavingDraft(true);
-        setDraftError(null);
-        setDraftNotice(null);
-      }
-
-      draftSaveInFlightRef.current = true;
-
-      try {
-        if (!userId) {
-          const snapshot = await buildSnapshot();
-          writeLocalSellDraft(snapshot);
-          if (!silent) {
-            setDraftNotice("Borrador guardado en este dispositivo. Iniciá sesión para sincronizarlo en tu cuenta.");
-            setDraftError(null);
-          }
-          return true;
-        }
-
-        const { product, error } = await saveProductDraft({
-          userId,
-          draftId,
-          title,
-          description,
-          category,
-          condition,
-          newCondition,
-          usedCondition,
-          price: parsePriceDigits(price),
-          brand: brand.trim() || null,
-          institution: institution.trim() || null,
-          size: sizeLabel.trim() || null,
-          location,
-          deliveryMethod: delivery ? parseDeliveryMethodForPublish(delivery) : null,
-          existingImageUrls: remoteImageUrls,
-          newImageFiles: photos.map((p) => p.file),
-        });
-
-        if (error || !product) {
-          if (!silent) {
-            setDraftError(error ?? "No se pudo guardar el borrador.");
-            setDraftNotice(null);
-          }
-          return false;
-        }
-
-        clearLocalSellDraft();
-        const previousDraftId = draftId;
-        setDraftId(product.id);
-        setRemoteImageUrls(product.images ?? []);
+      if (product && (product.status === "active" || product.status === "paused")) {
         setPhotos((prev) => {
           revokeList(prev);
           return [];
         });
-
-        if (!previousDraftId && product.id) {
-          router.replace(`/vender?borrador=${encodeURIComponent(product.id)}`, { scroll: false });
-        }
-
-        if (!silent) {
-          setDraftNotice(
-            "Borrador guardado correctamente en tu cuenta. Podés verlo en Perfil → Borradores.",
-          );
-          setDraftError(null);
-        }
-        return true;
-      } catch (err) {
-        console.error("[Colex vender] borrador", err);
-        if (!silent) {
-          setDraftError("Ocurrió un error al guardar el borrador.");
-          setDraftNotice(null);
-        }
-        return false;
-      } finally {
-        draftSaveInFlightRef.current = false;
-        if (!silent) setSavingDraft(false);
+        setTitle(product.title);
+        setDescription(product.description ?? "");
+        setCategory(product.category === "Otros" ? "" : product.category);
+        setCondition(
+          product.condition === "nuevo" || product.condition === "usado" ? product.condition : "",
+        );
+        setNewCondition(product.new_condition ?? "");
+        setUsedCondition(product.used_condition ?? "");
+        setPrice(String(product.price));
+        setBrand(product.brand ?? "");
+        setInstitution(product.institution ?? "");
+        setSizeLabel(product.size ?? "");
+        setLocation(product.location === "No indicada" ? "" : product.location);
+        setDelivery(normalizeSellDeliveryForForm(product.delivery_method) || "ambos");
+        setRemoteImageUrls(product.images ?? []);
+        setFormLoadDone(true);
+        return;
       }
-    },
-    [
-      brand,
-      buildSnapshot,
-      category,
-      condition,
-      delivery,
-      description,
-      draftId,
-      institution,
-      location,
-      newCondition,
-      photos,
-      price,
-      remoteImageUrls,
-      router,
-      sizeLabel,
-      title,
-      usedCondition,
-      userId,
-    ],
-  );
 
-  useEffect(() => {
-    if (isEditMode || !draftLoadDone || skipAutosaveRef.current) return;
+      setSubmitError("No encontramos esta publicación para editar.");
+      setFormLoadDone(true);
+    }
 
-    const content = hasFormContent({
-      title,
-      description,
-      category,
-      condition,
-      price,
-      brand,
-      institution,
-      sizeLabel,
-      location,
-      delivery,
-      photoCount: photos.length,
-      remoteCount: remoteImageUrls.length,
-    });
-    if (!content) return;
-
-    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
-    autosaveTimerRef.current = setTimeout(() => {
-      void persistDraft({ silent: true });
-    }, AUTOSAVE_MS);
+    void loadForm();
 
     return () => {
-      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+      cancelled = true;
     };
-  }, [
-    draftLoadDone,
-    title,
-    description,
-    category,
-    condition,
-    newCondition,
-    usedCondition,
-    price,
-    brand,
-    institution,
-    sizeLabel,
-    location,
-    delivery,
-    photos,
-    remoteImageUrls,
-    persistDraft,
-    isEditMode,
-  ]);
+  }, [authReady, userId, isEditMode, editProductId]);
 
   const addFiles = (fileList: FileList | null) => {
     if (!fileList?.length) return;
@@ -613,7 +199,6 @@ export function SellForm({ editProductId }: SellFormProps = {}) {
       return [];
     });
     setRemoteImageUrls([]);
-    setDraftId(null);
     setTitle("");
     setDescription("");
     setCategory("");
@@ -627,7 +212,6 @@ export function SellForm({ editProductId }: SellFormProps = {}) {
     setLocation("");
     setDelivery("ambos");
     setErrors({});
-    clearLocalSellDraft();
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -717,37 +301,6 @@ export function SellForm({ editProductId }: SellFormProps = {}) {
         return;
       }
 
-      if (draftId) {
-        const { product, error } = await publishExistingDraft(draftId, userId, {
-          draftId,
-          userId,
-          title,
-          description,
-          category,
-          condition,
-          newCondition,
-          usedCondition,
-          price: priceValue,
-          brand: brand.trim() || null,
-          institution: institution.trim() || null,
-          size: sizeLabel.trim() || null,
-          location,
-          deliveryMethod: parseDeliveryMethodForPublish(delivery),
-          existingImageUrls: remoteImageUrls,
-          newImageFiles: photos.map((p) => p.file),
-          imageFiles: photos.map((p) => p.file),
-        });
-
-        if (error || !product) {
-          setSubmitError(error ?? "No se pudo publicar el producto.");
-          return;
-        }
-
-        resetForm();
-        router.push(`/producto/${encodeURIComponent(product.id)}?publicado=1`);
-        return;
-      }
-
       const { product, error } = await publishProduct({
         userId,
         title,
@@ -780,23 +333,13 @@ export function SellForm({ editProductId }: SellFormProps = {}) {
     }
   };
 
-  const handleDraft = () => {
-    if (!userId) {
-      setDraftNotice(null);
-      setDraftError("Iniciá sesión para guardar el borrador en tu cuenta.");
-      router.push("/login?next=%2Fvender");
-      return;
-    }
-    void persistDraft({ silent: false, requireAuth: true });
-  };
-
-  if (!authReady || !draftLoadDone) {
+  if (!authReady || !formLoadDone) {
     return (
       <p className="rounded-2xl border border-zinc-200 bg-white px-4 py-8 text-center text-sm text-zinc-600">
         {authReady
           ? isEditMode
             ? "Cargando publicación…"
-            : "Cargando borrador…"
+            : "Preparando formulario…"
           : "Comprobando sesión…"}
       </p>
     );
@@ -827,36 +370,21 @@ export function SellForm({ editProductId }: SellFormProps = {}) {
       {!userId ? (
         <div className="rounded-2xl border border-[#822020]/20 bg-[#822020]/[0.06] px-4 py-3 text-sm text-zinc-700 sm:px-5">
           <p>
-            Podés completar y guardar un borrador en este dispositivo.{" "}
             <Link href="/login?next=%2Fvender" className="font-semibold text-[#822020] underline-offset-2 hover:underline">
               Iniciá sesión
             </Link>{" "}
-            para sincronizar borradores en tu perfil y publicar.
+            para publicar tu producto en Colex.
           </p>
         </div>
       ) : isEditMode ? (
         <p className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2 text-sm text-zinc-600">
           Editando tu publicación. Los cambios se guardan al confirmar.
         </p>
-      ) : draftId ? (
-        <p className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2 text-sm text-zinc-600">
-          Editando borrador guardado. Los cambios se guardan automáticamente.
-        </p>
       ) : null}
 
       {submitError ? (
         <p role="alert" className="rounded-2xl border border-[#822020]/25 bg-[#822020]/10 px-4 py-3 text-sm text-[#6d1b1b]">
           {submitError}
-        </p>
-      ) : null}
-
-      {draftNotice ? (
-        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900">{draftNotice}</p>
-      ) : null}
-
-      {draftError ? (
-        <p role="alert" className="rounded-xl border border-[#822020]/25 bg-[#822020]/10 px-4 py-2 text-sm text-[#6d1b1b]">
-          {draftError}
         </p>
       ) : null}
 
@@ -961,7 +489,6 @@ export function SellForm({ editProductId }: SellFormProps = {}) {
             onChange={(e) => {
               setTitle(e.target.value);
               setErrors((x) => ({ ...x, title: undefined }));
-              setDraftNotice(null);
             }}
             placeholder="Ej. Mochila con ruedas, talle único"
           />
@@ -980,7 +507,6 @@ export function SellForm({ editProductId }: SellFormProps = {}) {
             onChange={(e) => {
               setDescription(e.target.value);
               setErrors((x) => ({ ...x, description: undefined }));
-              setDraftNotice(null);
             }}
             placeholder="Contá el estado, medidas, marca, etc."
           />
@@ -998,7 +524,6 @@ export function SellForm({ editProductId }: SellFormProps = {}) {
             onChange={(e) => {
               setCategory(e.target.value);
               setErrors((x) => ({ ...x, category: undefined }));
-              setDraftNotice(null);
             }}
             aria-invalid={!!errors.category}
           >
@@ -1036,7 +561,6 @@ export function SellForm({ editProductId }: SellFormProps = {}) {
                   checked={condition === v}
                   onChange={() => {
                     setCondition(v);
-                    setDraftNotice(null);
                     setErrors((x) => ({ ...x, condition: undefined, newCondition: undefined, usedCondition: undefined }));
                     if (v === "usado") setNewCondition("");
                     if (v === "nuevo") setUsedCondition("");
@@ -1069,7 +593,6 @@ export function SellForm({ editProductId }: SellFormProps = {}) {
                       checked={newCondition === v}
                       onChange={() => {
                         setNewCondition(v);
-                        setDraftNotice(null);
                         setErrors((x) => ({ ...x, newCondition: undefined }));
                       }}
                       className="h-4 w-4 border-zinc-300 text-[#822020] focus:ring-[#822020]/30"
@@ -1104,7 +627,6 @@ export function SellForm({ editProductId }: SellFormProps = {}) {
                       checked={usedCondition === v}
                       onChange={() => {
                         setUsedCondition(v);
-                        setDraftNotice(null);
                         setErrors((x) => ({ ...x, usedCondition: undefined }));
                       }}
                       className="h-4 w-4 border-zinc-300 text-[#822020] focus:ring-[#822020]/30"
@@ -1134,7 +656,6 @@ export function SellForm({ editProductId }: SellFormProps = {}) {
               onChange={(e) => {
                 setPrice(e.target.value);
                 setErrors((x) => ({ ...x, price: undefined }));
-                setDraftNotice(null);
               }}
               placeholder="Ej. 45000 o 12.500"
             />
@@ -1162,7 +683,6 @@ export function SellForm({ editProductId }: SellFormProps = {}) {
             value={brand}
             onChange={(e) => {
               setBrand(e.target.value);
-              setDraftNotice(null);
             }}
             placeholder="Ej. Nike, Adidas, Topper…"
           />
@@ -1178,7 +698,6 @@ export function SellForm({ editProductId }: SellFormProps = {}) {
             value={institution}
             onChange={(e) => {
               setInstitution(e.target.value);
-              setDraftNotice(null);
             }}
             placeholder="Colegio al que aplica el artículo"
           />
@@ -1194,7 +713,6 @@ export function SellForm({ editProductId }: SellFormProps = {}) {
             value={sizeLabel}
             onChange={(e) => {
               setSizeLabel(e.target.value);
-              setDraftNotice(null);
             }}
             placeholder="Ej. 14, M, único…"
           />
@@ -1211,7 +729,6 @@ export function SellForm({ editProductId }: SellFormProps = {}) {
             onChange={(e) => {
               setLocation(e.target.value);
               setErrors((x) => ({ ...x, location: undefined }));
-              setDraftNotice(null);
             }}
             placeholder="Barrio, ciudad o zona (ej. Belgrano, CABA)"
           />
@@ -1237,7 +754,6 @@ export function SellForm({ editProductId }: SellFormProps = {}) {
                   checked={delivery === v}
                   onChange={() => {
                     setDelivery(v);
-                    setDraftNotice(null);
                     setErrors((x) => ({ ...x, delivery: undefined }));
                   }}
                   className="mt-0.5 h-4 w-4 text-[#822020] focus:ring-[#822020]/30 sm:mt-0"
@@ -1276,24 +792,15 @@ export function SellForm({ editProductId }: SellFormProps = {}) {
         {isEditMode ? (
           <Link
             href="/perfil?tab=publicaciones"
-            className="order-2 inline-flex items-center justify-center rounded-full border border-zinc-200 bg-white px-6 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 sm:order-1 sm:px-8 sm:text-base"
+            className="inline-flex items-center justify-center rounded-full border border-zinc-200 bg-white px-6 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 sm:px-8 sm:text-base"
           >
             Cancelar
           </Link>
-        ) : (
-          <button
-            type="button"
-            onClick={handleDraft}
-            disabled={savingDraft}
-            className="order-2 rounded-full border border-zinc-200 bg-white px-6 py-3 text-sm font-medium text-zinc-800 transition hover:border-zinc-300 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 sm:order-1 sm:px-8 sm:text-base"
-          >
-            {savingDraft ? "Guardando…" : "Guardar borrador"}
-          </button>
-        )}
+        ) : null}
         <button
           type="submit"
           disabled={publishing}
-          className="order-1 rounded-full bg-[#822020] px-6 py-3 text-sm font-medium text-white transition hover:bg-[#6d1b1b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#822020] disabled:cursor-not-allowed disabled:opacity-60 sm:order-2 sm:px-10 sm:text-base"
+          className="rounded-full bg-[#822020] px-6 py-3 text-sm font-medium text-white transition hover:bg-[#6d1b1b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#822020] disabled:cursor-not-allowed disabled:opacity-60 sm:px-10 sm:text-base"
         >
           {publishing
             ? isEditMode

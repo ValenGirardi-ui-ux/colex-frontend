@@ -1,8 +1,8 @@
 export type ProductCondition = "nuevo" | "usado";
 export type ProductNewCondition = "con_etiqueta" | "sin_etiqueta";
 export type ProductUsedCondition = "casi_nuevo" | "algo_desgastado" | "bastante_desgastado" | "roto";
-/** `active` = publicado y visible en catálogo; `draft` = borrador del vendedor. */
-export type ProductStatus = "active" | "sold" | "paused" | "draft";
+/** `active` = publicado y visible en catálogo. */
+export type ProductStatus = "active" | "sold" | "paused";
 
 export function isPublishedProduct(status: ProductStatus): boolean {
   return status === "active";

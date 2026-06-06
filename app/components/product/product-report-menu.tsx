@@ -1,16 +1,13 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import {
+  PRODUCT_REPORT_REASONS,
+  type ProductReportReason,
+} from "@/src/lib/product-report-reasons";
+import { submitProductReport } from "@/src/services/product-reports";
 
-export const PRODUCT_REPORT_REASONS = [
-  "Contenido inapropiado",
-  "Producto falso o engañoso",
-  "Precio sospechoso",
-  "Spam",
-  "Otro",
-] as const;
-
-export type ProductReportReason = (typeof PRODUCT_REPORT_REASONS)[number];
+export { PRODUCT_REPORT_REASONS, type ProductReportReason };
 
 const SUCCESS_MESSAGE =
   "Publicación reportada. Gracias por ayudarnos a mantener Colex seguro.";
@@ -25,6 +22,8 @@ export function ProductReportMenu({ productId }: ProductReportMenuProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [reason, setReason] = useState<ProductReportReason>(PRODUCT_REPORT_REASONS[0]);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -57,11 +56,19 @@ export function ProductReportMenu({ productId }: ProductReportMenuProps) {
     setMenuOpen(false);
     setModalOpen(true);
     setReason(PRODUCT_REPORT_REASONS[0]);
+    setSubmitError(null);
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // Solo UX por ahora: sin Supabase ni notificaciones (productId/reason reservados para backend).
+    setSubmitting(true);
+    setSubmitError(null);
+    const { ok, error } = await submitProductReport(productId, reason);
+    setSubmitting(false);
+    if (!ok) {
+      setSubmitError(error ?? "No se pudo enviar el reporte.");
+      return;
+    }
     setModalOpen(false);
     setSubmitted(true);
   }
@@ -158,19 +165,27 @@ export function ProductReportMenu({ productId }: ProductReportMenuProps) {
               ))}
             </fieldset>
 
+            {submitError ? (
+              <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">
+                {submitError}
+              </p>
+            ) : null}
+
             <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
-                className="rounded-full border border-zinc-300 bg-white px-5 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
+                disabled={submitting}
+                className="rounded-full border border-zinc-300 bg-white px-5 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-60"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="rounded-full bg-[#822020] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#6d1b1b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#822020]"
+                disabled={submitting}
+                className="rounded-full bg-[#822020] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#6d1b1b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#822020] disabled:opacity-70"
               >
-                Enviar reporte
+                {submitting ? "Enviando…" : "Enviar reporte"}
               </button>
             </div>
           </form>

@@ -68,7 +68,7 @@ export async function getProductById(id: string): Promise<Product | null> {
   return enriched ?? product;
 }
 
-/** Producto propio (incluye borradores). Requiere RLS products_select_own. */
+/** Producto propio del vendedor. Requiere RLS products_select_own. */
 export async function getOwnProductById(id: string, userId: string): Promise<Product | null> {
   if (!hasSupabaseEnv) return null;
 
@@ -102,7 +102,7 @@ export async function createProduct(productData: ProductInsert): Promise<Product
     ...productData,
     status: productData.status ?? "active",
     images: productData.images ?? [],
-    condition: productData.condition ?? (productData.status === "draft" ? null : "usado"),
+    condition: productData.condition ?? "usado",
     new_condition: productData.new_condition ?? null,
     used_condition: productData.used_condition ?? null,
   };
@@ -141,35 +141,6 @@ export async function deleteProduct(id: string, userId: string): Promise<void> {
 
   const { error } = await supabase.from("products").delete().eq("id", id).eq("user_id", userId);
   if (error) throw new Error(error.message);
-}
-
-export async function getDraftsByUserId(userId: string): Promise<Product[]> {
-  if (!hasSupabaseEnv) return [];
-
-  let { data, error } = await supabase
-    .from("products")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("status", "draft")
-    .order("updated_at", { ascending: false });
-
-  if (error?.message?.includes("updated_at")) {
-    const fallback = await supabase
-      .from("products")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("status", "draft")
-      .order("created_at", { ascending: false });
-    data = fallback.data;
-    error = fallback.error;
-  }
-
-  if (error) {
-    console.warn("[Colex products] listar borradores", error.message);
-    return [];
-  }
-  if (!data?.length) return [];
-  return (data as Product[]).map(ensureProductImages);
 }
 
 export async function getProductsByCategory(category: string): Promise<Product[]> {

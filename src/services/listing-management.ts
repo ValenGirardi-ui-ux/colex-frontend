@@ -75,9 +75,6 @@ async function setListingStatus(
   if (!existing) {
     return { product: null, error: "No encontramos esta publicación." };
   }
-  if (existing.status === "draft") {
-    return { product: null, error: "Los borradores se gestionan desde la pestaña Borradores." };
-  }
   if (status === "active" && existing.status !== "paused") {
     return { product: null, error: "Solo podés republicar publicaciones pausadas." };
   }
@@ -116,10 +113,6 @@ export async function deleteListing(
   if (!existing) {
     return { error: "No encontramos esta publicación." };
   }
-  if (existing.status === "draft") {
-    return { error: "Eliminá los borradores desde la pestaña Borradores." };
-  }
-
   try {
     await deleteProduct(productId, userId);
     return { error: null };
