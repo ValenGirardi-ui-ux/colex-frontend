@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FavoriteToggleButton } from "@/app/components/favorite-toggle-button";
+import { ProductReportMenu } from "@/app/components/product/product-report-menu";
 import { StartProductConversationButton } from "@/app/components/start-product-conversation-button";
 import { formatArsPrice } from "@/src/lib/money";
 import { getDeliveryMethodDisplay } from "@/src/lib/delivery-method";
@@ -18,7 +19,12 @@ export function ProductDetailActions({ product }: ProductDetailActionsProps) {
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      <h1 className="text-xl font-bold leading-tight text-zinc-900 max-lg:break-words sm:text-3xl lg:text-4xl">{product.title}</h1>
+      <div className="flex items-start justify-between gap-3">
+        <h1 className="min-w-0 flex-1 text-xl font-bold leading-tight text-zinc-900 max-lg:break-words sm:text-3xl lg:text-4xl">
+          {product.title}
+        </h1>
+        <ProductReportMenu productId={product.id} />
+      </div>
 
       <div className="flex flex-wrap items-baseline gap-2">
         <span className="text-3xl font-bold text-zinc-900 sm:text-4xl">{formatArsPrice(product.price)}</span>
