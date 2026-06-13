@@ -37,8 +37,11 @@ function timeLabel(iso: string): string {
   }
 }
 
-function isUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+function isUuid(value: string | null | undefined): value is string {
+  return (
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  );
 }
 
 function mergeInboxWithThread(
@@ -169,18 +172,33 @@ export function MensajesInbox() {
         setUrlHandled(true);
         return;
       }
+
+      if (!isUuid(userId)) {
+        setUrlError("Tenés que iniciar sesión para abrir este chat.");
+        setUrlHandled(true);
+        return;
+      }
+      const currentUserId = userId;
+
       const product = await getProductById(productoParam);
       if (cancelled) return;
       if (!product || !isUuid(product.user_id)) {
+        setUrlError("No se encontró la publicación o el vendedor no puede chatear.");
         setUrlHandled(true);
         return;
       }
 
       const sellerId = product.user_id;
       const buyerId =
-        compradorParam && isUuid(compradorParam) ? compradorParam : userId;
+        compradorParam && isUuid(compradorParam) ? compradorParam : currentUserId;
 
-      if (buyerId !== userId && sellerId !== userId) {
+      if (!isUuid(buyerId) || !isUuid(sellerId)) {
+        setUrlError("No se pudo identificar al comprador o al vendedor para este chat.");
+        setUrlHandled(true);
+        return;
+      }
+
+      if (buyerId !== currentUserId && sellerId !== currentUserId) {
         setUrlError("No tenés permiso para abrir este chat.");
         setUrlHandled(true);
         return;
