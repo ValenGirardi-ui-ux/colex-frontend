@@ -64,16 +64,24 @@ export function SiteHeaderAuthLink() {
 
   if (!ready) {
     return (
-      <span className={profileButtonClass} aria-busy="true" aria-label="Comprobando sesión">
-        <ProfileIcon className="h-8 w-8 animate-pulse opacity-40 lg:h-9 lg:w-9" />
+      <span
+        className={`${profileButtonClass} max-lg:hidden`}
+        aria-busy="true"
+        aria-label="Comprobando sesión"
+      >
+        <ProfileIcon className="h-8 w-8 animate-pulse opacity-40 lg:h-8 lg:w-8" />
       </span>
     );
   }
 
   if (signedIn) {
     return (
-      <Link href="/perfil" aria-label={signedInLabel} className={profileButtonClass}>
-        <ProfileIcon className="h-8 w-8 lg:h-9 lg:w-9" />
+      <Link
+        href="/perfil"
+        aria-label={signedInLabel}
+        className={`${profileButtonClass} max-lg:hidden`}
+      >
+        <ProfileIcon className="h-8 w-8 lg:h-8 lg:w-8" />
       </Link>
     );
   }

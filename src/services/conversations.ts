@@ -350,15 +350,32 @@ async function fetchProfilesMap(userIds: string[]): Promise<Map<string, ProfileR
   return map;
 }
 
-function mapMessagesToUi(messages: DbMessage[], currentUserId: string): ChatMessage[] {
-  return messages.map((m) => ({
+export function dbMessageToChatMessage(m: DbMessage, currentUserId: string): ChatMessage {
+  return {
     id: m.id,
     sender: m.sender_id === currentUserId ? "me" : "peer",
     text: m.content,
     imageUrl: m.image_url,
     messageType: m.message_type,
     createdAt: m.created_at,
-  }));
+  };
+}
+
+/** Mapea fila de Realtime/API a mensaje de UI. */
+export function parseChatMessageRecord(
+  record: Record<string, unknown> | null | undefined,
+  currentUserId: string,
+): ChatMessage | null {
+  if (!record || typeof record !== "object") return null;
+  try {
+    return dbMessageToChatMessage(rowToMessage(record), currentUserId);
+  } catch {
+    return null;
+  }
+}
+
+function mapMessagesToUi(messages: DbMessage[], currentUserId: string): ChatMessage[] {
+  return messages.map((m) => dbMessageToChatMessage(m, currentUserId));
 }
 
 function buildUiConversation(

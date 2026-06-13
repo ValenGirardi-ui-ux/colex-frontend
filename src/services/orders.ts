@@ -33,6 +33,15 @@ function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+export function parseOrderRecord(record: Record<string, unknown> | null | undefined): Order | null {
+  if (!record || typeof record !== "object") return null;
+  try {
+    return rowToOrder(record);
+  } catch {
+    return null;
+  }
+}
+
 function rowToOrder(row: Record<string, unknown>): Order {
   return {
     id: String(row.id ?? ""),

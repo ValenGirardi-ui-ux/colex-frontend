@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -10,6 +10,9 @@ import {
   useEnsureProductConversation,
   useSendMessageMutation,
 } from "@/src/hooks/messages";
+import { useActiveConversationRealtime } from "@/src/hooks/use-active-conversation-realtime";
+import { useMessagesRealtime } from "@/src/hooks/use-messages-realtime";
+import { mergeChatMessages } from "@/src/lib/chat-message-merge";
 import {
   filterConversationsByTab,
   inboxTabForConversation,
@@ -19,7 +22,7 @@ import { ChatConversationPanel } from "@/app/mensajes/chat-conversation-panel";
 import { VerifiedName } from "@/app/components/verified-badge";
 import { uploadChatImage } from "@/src/services/chat-images";
 import { getProductById } from "@/src/services/products";
-import type { Conversation } from "@/src/types/messages";
+import type { ChatMessage, Conversation } from "@/src/types/messages";
 
 function timeLabel(iso: string): string {
   try {
@@ -59,6 +62,7 @@ export function MensajesInbox() {
   const searchParams = useSearchParams();
   const convParam = searchParams.get("conv");
   const productoParam = searchParams.get("producto");
+  const compradorParam = searchParams.get("comprador");
   const errorParam = searchParams.get("error");
   const tabParam = searchParams.get("tab");
 
@@ -79,6 +83,7 @@ export function MensajesInbox() {
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
   const [urlError, setUrlError] = useState<string | null>(null);
   const [urlHandled, setUrlHandled] = useState(false);
+  const [liveMessages, setLiveMessages] = useState<ChatMessage[]>([]);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -89,6 +94,34 @@ export function MensajesInbox() {
 
   const sendMessageMutation = useSendMessageMutation(userId);
   const ensureConversation = useEnsureProductConversation();
+
+  useMessagesRealtime(userId);
+
+  const scrollToLatestMessage = useCallback(() => {
+    requestAnimationFrame(() => {
+      const el = messagesScrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    });
+  }, []);
+
+  const handleRealtimeMessage = useCallback(
+    (message: ChatMessage) => {
+      setLiveMessages((prev) => {
+        if (prev.some((m) => m.id === message.id)) return prev;
+        return [...prev, message];
+      });
+      scrollToLatestMessage();
+    },
+    [scrollToLatestMessage],
+  );
+
+  useActiveConversationRealtime(userId, activeId, {
+    onMessageInserted: handleRealtimeMessage,
+  });
+
+  useEffect(() => {
+    setLiveMessages([]);
+  }, [activeId]);
 
   const conversations = useMemo(
     () => mergeInboxWithThread(inbox, activeId, activeThread),
@@ -129,7 +162,6 @@ export function MensajesInbox() {
       return;
     }
 
-    const buyerId = userId;
     let cancelled = false;
 
     async function openProductChat() {
@@ -144,12 +176,28 @@ export function MensajesInbox() {
         return;
       }
 
+      const sellerId = product.user_id;
+      const buyerId =
+        compradorParam && isUuid(compradorParam) ? compradorParam : userId;
+
+      if (buyerId !== userId && sellerId !== userId) {
+        setUrlError("No tenés permiso para abrir este chat.");
+        setUrlHandled(true);
+        return;
+      }
+
+      if (buyerId === sellerId) {
+        setUrlError("No podés abrir un chat sobre tu propia publicación.");
+        setUrlHandled(true);
+        return;
+      }
+
       try {
         const result = await ensureConversation.mutateAsync({
           productId: product.id,
           productTitle: product.title,
           buyerId,
-          sellerId: product.user_id,
+          sellerId,
           conversationType: "chat",
         });
         if (cancelled) return;
@@ -175,12 +223,30 @@ export function MensajesInbox() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- apertura única por URL
-  }, [sessionLoading, userId, convParam, productoParam, urlHandled, inbox.length]);
+  }, [sessionLoading, userId, convParam, productoParam, compradorParam, urlHandled, inbox.length]);
 
-  const active = useMemo(
+  const activeBase = useMemo(
     () => conversations.find((c) => c.id === activeId) ?? null,
     [conversations, activeId],
   );
+
+  const active = useMemo(() => {
+    if (!activeBase) return null;
+    if (liveMessages.length === 0) return activeBase;
+    return {
+      ...activeBase,
+      messages: mergeChatMessages(activeBase.messages, liveMessages),
+    };
+  }, [activeBase, liveMessages]);
+
+  useEffect(() => {
+    if (!activeBase) return;
+    setLiveMessages((prev) => {
+      if (prev.length === 0) return prev;
+      const next = prev.filter((m) => !activeBase.messages.some((b) => b.id === m.id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [activeBase]);
 
   useEffect(() => {
     if (!convParam || !isUuid(convParam)) return;
@@ -218,6 +284,7 @@ export function MensajesInbox() {
     setPendingImageUrl(null);
     setPendingImageName(null);
     setAttachError(null);
+    setLiveMessages([]);
     const conv = conversations.find((c) => c.id === id);
     if (conv) {
       setInboxTab(inboxTabForConversation(conv));
@@ -229,10 +296,9 @@ export function MensajesInbox() {
   }, []);
 
   useEffect(() => {
-    const el = messagesScrollRef.current;
-    if (!el || !active) return;
-    el.scrollTop = el.scrollHeight;
-  }, [active?.id, active?.messages.length, threadLoading]);
+    if (!active) return;
+    scrollToLatestMessage();
+  }, [active?.id, active?.messages.length, threadLoading, scrollToLatestMessage]);
 
   const attachImage = useCallback(
     async (file: File) => {

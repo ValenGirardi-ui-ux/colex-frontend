@@ -385,7 +385,6 @@ function SectionPerfil() {
 
 function SectionAjustesCuenta() {
   const [notifEmail, setNotifEmail] = useState(true);
-  const [mostrarInstitucion, setMostrarInstitucion] = useState(true);
 
   return (
     <div className="space-y-8">
@@ -422,29 +421,6 @@ function SectionAjustesCuenta() {
                 <span
                   className={`pointer-events-none inline-block h-7 w-7 translate-y-0.5 rounded-full bg-white transition ${
                     notifEmail ? "translate-x-6" : "translate-x-0.5"
-                  }`}
-                />
-              </button>
-            </li>
-            <li className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-medium text-zinc-900">Mostrar mi institución en el perfil</p>
-                <p className="text-sm text-zinc-500">Visible en publicaciones y en tu ficha pública.</p>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={mostrarInstitucion}
-                onClick={() => setMostrarInstitucion((v) => !v)}
-                className={`relative inline-flex h-8 w-14 shrink-0 cursor-pointer rounded-full border transition ${
-                  mostrarInstitucion
-                    ? "border-[#822020]/30 bg-[#822020]"
-                    : "border-zinc-200 bg-zinc-200"
-                }`}
-              >
-                <span
-                  className={`pointer-events-none inline-block h-7 w-7 translate-y-0.5 rounded-full bg-white transition ${
-                    mostrarInstitucion ? "translate-x-6" : "translate-x-0.5"
                   }`}
                 />
               </button>

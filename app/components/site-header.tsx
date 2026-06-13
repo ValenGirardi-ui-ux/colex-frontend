@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { ColexLogo } from "@/app/components/colex-logo";
 import { CategoryMegaMenu } from "@/app/components/category-mega-menu";
 import { ProductSearchForm } from "@/app/components/product-search-form";
 import { NotificationsBell } from "@/app/components/notifications-bell";
@@ -10,13 +11,11 @@ export function SiteHeader() {
     <header className="relative z-30 border-b border-zinc-200 bg-white">
       <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-2 px-4 pt-4 pb-0 max-lg:gap-2 max-lg:pt-3 lg:px-6">
         <div className="grid max-lg:grid-cols-[minmax(0,1fr)_auto] max-lg:grid-rows-[auto_auto] max-lg:items-center max-lg:gap-x-2 max-lg:gap-y-2.5 lg:flex lg:flex-wrap lg:items-center lg:gap-6">
-          <Link
-            href="/"
-            className="max-lg:col-start-1 max-lg:row-start-1 text-3xl font-bold italic leading-none text-[#8E1B22] lg:text-4xl"
-            aria-label="Colex"
-          >
-            colex
-          </Link>
+          <ColexLogo
+            className="max-lg:col-start-1 max-lg:row-start-1"
+            heightClass="h-11 sm:h-12 lg:h-14"
+            surfaceClassName="bg-white"
+          />
 
           <Suspense
             fallback={
@@ -31,9 +30,30 @@ export function SiteHeader() {
             />
           </Suspense>
 
-          <div className="ml-auto flex items-center gap-0.5 text-zinc-900 max-lg:col-start-2 max-lg:row-start-1 max-lg:shrink-0 lg:gap-3">
+          <div className="ml-auto flex items-center gap-0.5 text-zinc-900 max-lg:col-start-2 max-lg:row-start-1 max-lg:shrink-0 lg:gap-2.5">
             <SiteHeaderAuthLink />
-            <NotificationsBell />
+            <Link
+              href="/buscar"
+              aria-label="Buscar"
+              className="p-1.5 text-zinc-800 transition hover:text-[#822020] lg:hidden"
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="h-7 w-7 lg:h-6 lg:w-6"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <circle cx="11" cy="11" r="6.25" stroke="currentColor" strokeWidth="1.8" />
+                <path
+                  d="M16.5 16.5L20 20"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </Link>
             <Link
               href="/mensajes"
               aria-label="Mensajes"
@@ -42,7 +62,7 @@ export function SiteHeader() {
               <svg
                 aria-hidden="true"
                 viewBox="0 0 24 24"
-                className="h-6 w-6 lg:h-8 lg:w-8"
+                className="h-6 w-6 lg:h-7 lg:w-7"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
               >
@@ -55,32 +75,12 @@ export function SiteHeader() {
                 />
               </svg>
             </Link>
-            <Link
-              href="/favoritos"
-              aria-label="Favoritos"
-              className="p-1.5 text-zinc-800 transition hover:text-[#822020] lg:p-2"
-            >
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-                className="h-7 w-7 lg:h-[34px] lg:w-[34px]"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M12 20.25C11.72 20.25 11.45 20.15 11.24 19.96L5.46 14.61C3.98 13.24 3.6 10.99 4.56 9.19C5.29 7.83 6.67 6.96 8.19 6.96C9.28 6.96 10.34 7.42 11.12 8.24L12 9.15L12.88 8.24C13.66 7.42 14.72 6.96 15.81 6.96C17.33 6.96 18.71 7.83 19.44 9.19C20.4 10.99 20.02 13.24 18.54 14.61L12.76 19.96C12.55 20.15 12.28 20.25 12 20.25Z"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </Link>
+            <NotificationsBell />
             <Link href="/ajustes" aria-label="Ajustes" className="p-1.5 md:-ml-1 lg:p-2">
               <svg
                 aria-hidden="true"
                 viewBox="0 0 24 24"
-                className="h-7 w-7 lg:h-[30px] lg:w-[30px]"
+                className="h-7 w-7 lg:h-7 lg:w-7"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
               >

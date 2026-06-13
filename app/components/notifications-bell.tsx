@@ -9,6 +9,7 @@ import {
   markNotificationRead,
   notificationHref,
 } from "@/src/services/notifications";
+import { useNotificationsRealtime } from "@/src/hooks/use-notifications-realtime";
 import { supabase } from "@/src/lib/supabase/client";
 import type { AppNotification } from "@/src/types/notification";
 
@@ -21,6 +22,12 @@ function formatNotificationTime(iso: string): string {
   } catch {
     return "";
   }
+}
+
+function sortNotifications(list: AppNotification[]): AppNotification[] {
+  return [...list].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
 }
 
 export function NotificationsBell() {
@@ -39,6 +46,46 @@ export function NotificationsBell() {
     if (!listResult.error) setNotifications(listResult.notifications);
     if (!countResult.error) setUnreadCount(countResult.count);
   }, []);
+
+  const handleInsert = useCallback((notification: AppNotification) => {
+    setNotifications((prev) => {
+      if (prev.some((n) => n.id === notification.id)) return prev;
+      return sortNotifications([notification, ...prev]).slice(0, 30);
+    });
+    if (!notification.read) {
+      setUnreadCount((c) => c + 1);
+    }
+  }, []);
+
+  const handleUpdate = useCallback((notification: AppNotification) => {
+    setNotifications((prev) => {
+      const existing = prev.find((n) => n.id === notification.id);
+      if (existing && existing.read !== notification.read) {
+        if (notification.read) {
+          setUnreadCount((c) => Math.max(0, c - 1));
+        } else {
+          setUnreadCount((c) => c + 1);
+        }
+      }
+      return sortNotifications(prev.map((n) => (n.id === notification.id ? notification : n)));
+    });
+  }, []);
+
+  const handleDelete = useCallback((notificationId: string) => {
+    setNotifications((prev) => {
+      const removed = prev.find((n) => n.id === notificationId);
+      if (removed && !removed.read) {
+        setUnreadCount((c) => Math.max(0, c - 1));
+      }
+      return prev.filter((n) => n.id !== notificationId);
+    });
+  }, []);
+
+  useNotificationsRealtime(userId, {
+    onInsert: handleInsert,
+    onUpdate: handleUpdate,
+    onDelete: handleDelete,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -71,14 +118,6 @@ export function NotificationsBell() {
     setLoading(true);
     void refresh(userId).finally(() => setLoading(false));
   }, [open, userId, refresh]);
-
-  useEffect(() => {
-    if (!userId) return;
-    const interval = window.setInterval(() => {
-      void refresh(userId);
-    }, 45_000);
-    return () => window.clearInterval(interval);
-  }, [userId, refresh]);
 
   useEffect(() => {
     if (!open) return;
@@ -128,7 +167,7 @@ export function NotificationsBell() {
         <svg
           aria-hidden="true"
           viewBox="0 0 24 24"
-          className="h-6 w-6 lg:h-8 lg:w-8"
+          className="h-6 w-6 lg:h-7 lg:w-7"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
         >

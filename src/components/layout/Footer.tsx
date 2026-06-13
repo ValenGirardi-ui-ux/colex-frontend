@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ColexLogo } from "@/app/components/colex-logo";
 
 const quickLinks = [
   { href: "/", label: "Inicio" },
@@ -19,13 +20,7 @@ export function Footer() {
     <footer className="mt-auto border-t border-zinc-200/80 bg-zinc-50/80">
       <div className="mx-auto hidden w-full max-w-[1240px] gap-8 px-4 py-10 sm:px-6 lg:grid lg:grid-cols-[1.25fr_1fr_1fr] lg:gap-10 lg:py-12">
         <section className="space-y-3">
-          <Link
-            href="/"
-            className="inline-block text-3xl font-bold italic leading-none text-[#822020]"
-            aria-label="Colex"
-          >
-            colex
-          </Link>
+          <ColexLogo heightClass="h-11 sm:h-12 lg:h-14" surfaceClassName="bg-zinc-50/80" />
           <p className="max-w-md text-sm leading-relaxed text-zinc-600 sm:text-base">
             Compra y venta de articulos escolares e institucionales, nuevos o usados.
           </p>

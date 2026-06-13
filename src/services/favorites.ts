@@ -8,6 +8,7 @@ import {
 } from "@/src/lib/favorites-local-storage";
 import { isUuidProductId, normalizeFavoriteProductId } from "@/src/lib/favorite-product-id";
 import { supabase } from "@/src/lib/supabase/client";
+import { notifySellerProductFavorited } from "@/src/services/notifications";
 import type { Product } from "@/src/types/product";
 
 /** Tabla `public.favorites` no creada o caché de PostgREST desactualizada. */
@@ -158,25 +159,28 @@ export async function fetchFavoriteProducts(userId: string): Promise<{ products:
   return { products, error: isFavoritesSchemaError(error) ? null : error };
 }
 
-async function addSupabaseFavorite(userId: string, productId: string): Promise<{ error: string | null; usedLocalFallback: boolean }> {
+async function addSupabaseFavorite(
+  userId: string,
+  productId: string,
+): Promise<{ error: string | null; usedLocalFallback: boolean; inserted: boolean }> {
   const { error } = await supabase.from("favorites").insert({
     user_id: userId,
     product_id: productId,
   });
   if (!error) {
     removeLocalFavorite(userId, productId);
-    return { error: null, usedLocalFallback: false };
+    return { error: null, usedLocalFallback: false, inserted: true };
   }
   if (error.code === "23505") {
     removeLocalFavorite(userId, productId);
-    return { error: null, usedLocalFallback: false };
+    return { error: null, usedLocalFallback: false, inserted: false };
   }
   if (isSupabaseFallbackError(error.message)) {
     addLocalFavorite(userId, productId);
-    return { error: null, usedLocalFallback: true };
+    return { error: null, usedLocalFallback: true, inserted: false };
   }
   warnFavoritesSchemaOnce(error.message);
-  return { error: error.message, usedLocalFallback: false };
+  return { error: error.message, usedLocalFallback: false, inserted: false };
 }
 
 /**
@@ -187,6 +191,9 @@ export async function addFavorite(userId: string, productId: string): Promise<{ 
 
   if (isUuidProductId(pid)) {
     const result = await addSupabaseFavorite(userId, pid);
+    if (!result.error && result.inserted) {
+      void notifySellerProductFavorited({ favoriterUserId: userId, productId: pid });
+    }
     return { error: result.error };
   }
 

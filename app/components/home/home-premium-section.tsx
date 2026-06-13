@@ -82,10 +82,10 @@ export function HomePremiumSection() {
                     key={benefit}
                     className="flex gap-3 rounded-xl border border-zinc-200/70 bg-white px-3.5 py-3 sm:px-4"
                   >
-                    <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#822020]/10 text-[#822020]">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#822020]/10 text-[#822020]">
                       <CheckIcon />
                     </span>
-                    <span className="text-sm leading-snug text-zinc-800 sm:text-[15px]">{benefit}</span>
+                    <span className="mt-1 text-sm leading-snug text-zinc-800 sm:text-[15px]">{benefit}</span>
                   </li>
                 ))}
               </ul>

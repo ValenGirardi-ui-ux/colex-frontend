@@ -89,7 +89,7 @@ export default function PremiumPage() {
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#822020]/10 text-[#822020]">
                   <CheckIcon />
                 </span>
-                <div className="min-w-0">
+                <div className="min-w-0 pt-1">
                   <h3 className="font-semibold text-zinc-900">{benefit.title}</h3>
                   <p className="mt-1 text-sm leading-relaxed text-zinc-600">{benefit.description}</p>
                 </div>

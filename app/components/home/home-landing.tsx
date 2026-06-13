@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { FeaturedBusinessesCarousel } from "@/app/components/home/featured-businesses-carousel";
 import { HomeFeed } from "@/app/components/home/home-feed";
+import { HomeProductsRealtime } from "@/app/components/home/home-products-realtime";
 import { HomePremiumSection } from "@/app/components/home/home-premium-section";
 import type { FeaturedBusiness } from "@/src/types/featured-business";
 import { ProductSearchForm } from "@/app/components/product-search-form";
@@ -206,12 +207,18 @@ function PromotionalBlock() {
     >
       <div className="mx-auto w-full max-w-[1240px] px-3 sm:px-4 lg:px-6">
       {/*
-       * IMAGEN PROMO: reemplazar el bloque gris (columna izquierda en desktop) por imagen de campaña.
-       * Tamaño sugerido: 1200×500 o recorte a la mitad (columna 50% en lg:grid-cols-2).
+       * Imagen promo: /public/images/home/promo-circulando.png (1024×577)
        */}
-      <div className="grid overflow-hidden rounded-3xl border border-zinc-200/90 bg-zinc-100/90 lg:grid-cols-2">
-        <div className="flex min-h-[200px] items-center justify-center border-b border-zinc-200/80 bg-gradient-to-br from-zinc-100 to-zinc-200/80 lg:min-h-[260px] lg:border-b-0 lg:border-r">
-          <p className="px-4 text-center text-sm text-zinc-400">Placeholder imagen promocional</p>
+      <div className="grid overflow-hidden rounded-3xl border border-zinc-200/90 bg-zinc-100/90 lg:grid-cols-2 lg:items-stretch">
+        <div className="relative aspect-[1024/577] overflow-hidden border-b border-zinc-200/80 bg-[#822020] lg:aspect-auto lg:min-h-[300px] lg:border-b-0 lg:border-r">
+          <img
+            src="/images/home/promo-circulando.png"
+            alt="Sacá fotos, publicá, vendé y cobrá: ciclo para vender artículos escolares"
+            width={1024}
+            height={577}
+            className="absolute inset-0 h-full w-full object-cover object-center"
+            decoding="async"
+          />
         </div>
         <div className="flex flex-col justify-center gap-4 p-6 sm:gap-5 sm:p-8 lg:p-10">
           <h2 className="text-2xl font-bold leading-tight text-zinc-900 sm:text-3xl">Dejá tus artículos escolares circulando</h2>
@@ -317,6 +324,7 @@ export function HomeLanding({
 
   return (
     <>
+      <HomeProductsRealtime />
       <Hero defaultSearchQuery={filterQuery} />
       <CategoryStrip />
       {showPremiumBusinesses ? <FeaturedBusinessesCarousel businesses={premiumBusinesses} /> : null}

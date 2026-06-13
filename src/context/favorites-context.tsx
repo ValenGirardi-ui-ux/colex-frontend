@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { normalizeFavoriteProductId } from "@/src/lib/favorite-product-id";
+import { subscribePostgresChanges } from "@/src/lib/supabase/realtime-subscribe";
 import { supabase } from "@/src/lib/supabase/client";
 import {
   addFavorite,
@@ -87,6 +88,45 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
       data.subscription.unsubscribe();
     };
   }, [loadForUser]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    return subscribePostgresChanges(
+      `favorites:${userId}`,
+      [
+        { event: "INSERT", table: "favorites", filter: `user_id=eq.${userId}` },
+        { event: "DELETE", table: "favorites", filter: `user_id=eq.${userId}` },
+      ],
+      (payload) => {
+        if (payload.eventType === "INSERT") {
+          const rawId = payload.new?.product_id;
+          const productId =
+            typeof rawId === "string" ? normalizeFavoriteProductId(rawId) : null;
+          if (!productId) return;
+          setFavoriteIdsState((prev) => {
+            if (prev.has(productId)) return prev;
+            const next = new Set(prev);
+            next.add(productId);
+            return next;
+          });
+          return;
+        }
+        if (payload.eventType === "DELETE") {
+          const rawId = payload.old?.product_id;
+          const productId =
+            typeof rawId === "string" ? normalizeFavoriteProductId(rawId) : null;
+          if (!productId) return;
+          setFavoriteIdsState((prev) => {
+            if (!prev.has(productId)) return prev;
+            const next = new Set(prev);
+            next.delete(productId);
+            return next;
+          });
+        }
+      },
+    );
+  }, [userId]);
 
   const isFavorite = useCallback(
     (productId: string) => favoriteIds.has(normalizeFavoriteProductId(productId)),

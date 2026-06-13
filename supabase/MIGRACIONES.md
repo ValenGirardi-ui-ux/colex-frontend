@@ -39,6 +39,9 @@ Sin `products`, la migración de **favoritos** falla por la foreign key.
 | 22 | `20260516800000_profile_storage_buckets.sql` | Buckets `avatars` y `shop-banners` + políticas Storage |
 | 23 | `20260516900000_orders_mercadopago.sql` | `mp_preference_id`, `mp_payment_id` en `orders` |
 | 24 | `20260517000000_chat_images.sql` | Imágenes en `messages` + bucket `chat-images` |
+| 25 | `20260517100000_realtime_publication.sql` | Realtime en messages, conversations, notifications, orders, favorites, products |
+| 26 | `20260517200000_notifications_product_favorited.sql` | Tipo `product_favorited` en notificaciones |
+| 27 | `20260517300000_notifications_favorite_chat_links.sql` | `related_product_id` + `actor_user_id` en notificaciones |
 
 ## Favoritos (error actual)
 

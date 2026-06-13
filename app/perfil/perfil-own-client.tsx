@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useOrdersRealtime } from "@/src/hooks/use-orders-realtime";
+import { subscribePostgresChanges } from "@/src/lib/supabase/realtime-subscribe";
 import { useFavorites } from "@/src/context/favorites-context";
 import { SiteHeader } from "@/app/components/site-header";
 import { ProfileView, parseProfileTab, type ProfileTabKey } from "@/app/components/profile/profile-view";
@@ -103,10 +105,42 @@ export function PerfilOwnClient() {
     };
   }, [phase, user?.id, favReady, favoriteIdsKey]);
 
-  const refreshListings = () => {
+  const refreshListings = useCallback(() => {
     if (!user?.id) return;
     void getSellerManageableListingsByUserId(user.id).then(setListings);
-  };
+  }, [user?.id]);
+
+  useOrdersRealtime(user?.id ?? null, {
+    enabled: phase === "ready",
+    onBuyerOrders: setBuyerOrders,
+    onSellerRows: setSellerSalesRows,
+    onError: setOrdersLoadError,
+  });
+
+  useEffect(() => {
+    if (phase !== "ready" || !user?.id) return;
+
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefresh = () => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(() => refreshListings(), 400);
+    };
+
+    const unsub = subscribePostgresChanges(
+      `seller-products:${user.id}`,
+      [
+        { event: "INSERT", table: "products", filter: `user_id=eq.${user.id}` },
+        { event: "UPDATE", table: "products", filter: `user_id=eq.${user.id}` },
+        { event: "DELETE", table: "products", filter: `user_id=eq.${user.id}` },
+      ],
+      scheduleRefresh,
+    );
+
+    return () => {
+      unsub();
+      if (debounce) clearTimeout(debounce);
+    };
+  }, [phase, user?.id, refreshListings]);
 
   const handleSellerSaleUpdated = (row: SellerOrderRow) => {
     setSellerSalesRows((prev) => prev.map((r) => (r.id === row.id ? row : r)));
