@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { SiteHeader } from "@/app/components/site-header";
-import { isMercadoPagoServerConfigured } from "@/src/lib/mercadopago/config";
 import { processMercadoPagoPaymentById } from "@/src/services/mercadopago-payment-process";
 
 type PageProps = {
@@ -51,7 +50,7 @@ export default async function ComprarPagoResultadoPage({ searchParams }: PagePro
   let registered = params.registered === "1";
 
   const paymentId = params.payment_id?.trim();
-  if (!registered && paymentId && isMercadoPagoServerConfigured()) {
+  if (!registered && paymentId) {
     const result = await processMercadoPagoPaymentById(paymentId);
     if (result.returnStatus !== "unknown") {
       status = result.returnStatus;

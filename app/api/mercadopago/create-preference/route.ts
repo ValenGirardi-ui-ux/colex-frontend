@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { resolveSiteOrigin } from "@/src/lib/mercadopago/site-url";
-import { isMercadoPagoServerConfigured } from "@/src/lib/mercadopago/config";
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
 import { createServiceRoleClient } from "@/src/lib/supabase/admin-service";
 import { createMercadoPagoPreference } from "@/src/services/mercadopago-server";
@@ -13,13 +12,6 @@ const OPEN_STATUSES = ["pendiente", "coordinando"];
 
 export async function POST(request: Request) {
   try {
-    if (!isMercadoPagoServerConfigured()) {
-      return NextResponse.json(
-        { error: "Mercado Pago no configurado (MERCADOPAGO_ACCESS_TOKEN)." },
-        { status: 503 },
-      );
-    }
-
     const supabase = await createServerSupabaseClient();
     const {
       data: { user },
