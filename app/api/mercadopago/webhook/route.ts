@@ -1,12 +1,6 @@
 import { NextResponse } from "next/server";
-import {
-  fetchMercadoPagoPayment,
-  isWebhookTokenValid,
-} from "@/src/services/mercadopago-server";
-import {
-  cancelOrderAfterMercadoPagoPayment,
-  fulfillOrderAfterMercadoPagoPayment,
-} from "@/src/services/order-payment-server";
+import { isWebhookTokenValid } from "@/src/services/mercadopago-server";
+import { processMercadoPagoPaymentById } from "@/src/services/mercadopago-payment-process";
 
 export const runtime = "nodejs";
 
@@ -30,35 +24,16 @@ function extractPaymentId(request: Request, body: Record<string, unknown> | null
 }
 
 async function handlePaymentNotification(paymentId: string): Promise<NextResponse> {
-  const { payment, error } = await fetchMercadoPagoPayment(paymentId);
-  if (error || !payment) {
-    console.error("[mercadopago/webhook] payment fetch failed", paymentId, error);
-    return NextResponse.json({ ok: false }, { status: 200 });
+  const result = await processMercadoPagoPaymentById(paymentId);
+  if (result.error) {
+    console.error("[mercadopago/webhook] process failed", paymentId, result.error);
   }
-
-  const orderId = payment.external_reference?.trim();
-  if (!orderId) {
-    console.warn("[mercadopago/webhook] payment without external_reference", paymentId);
-    return NextResponse.json({ ok: true, skipped: "no_reference" });
-  }
-
-  const mpPaymentId = String(payment.id);
-  const status = payment.status.toLowerCase();
-
-  if (status === "approved") {
-    const result = await fulfillOrderAfterMercadoPagoPayment(orderId, mpPaymentId);
-    if (!result.ok && !result.alreadyPaid) {
-      console.error("[mercadopago/webhook] fulfill failed", orderId, result.error);
-    }
-    return NextResponse.json({ ok: result.ok || result.alreadyPaid, status: "approved" });
-  }
-
-  if (status === "rejected" || status === "cancelled") {
-    await cancelOrderAfterMercadoPagoPayment(orderId, mpPaymentId);
-    return NextResponse.json({ ok: true, status });
-  }
-
-  return NextResponse.json({ ok: true, status, action: "ignored" });
+  return NextResponse.json({
+    ok: result.returnStatus === "success" || result.returnStatus === "pending" || !result.error,
+    status: result.returnStatus,
+    orderId: result.orderId,
+    alreadyPaid: result.alreadyPaid,
+  });
 }
 
 export async function POST(request: Request) {

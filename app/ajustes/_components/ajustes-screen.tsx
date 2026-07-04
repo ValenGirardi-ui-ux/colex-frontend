@@ -6,6 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { SectionDirecciones } from "@/app/ajustes/_components/addresses-section";
 import { AddressMissingAlertSlot } from "@/app/components/addresses/address-missing-alert-slot";
 import { PremiumBusinessSettings } from "@/app/ajustes/_components/premium-business-settings";
+import { SectionAcercaDe } from "@/app/ajustes/_components/section-acerca-de";
 import { SectionTiendasSeguidas } from "@/app/ajustes/_components/section-tiendas-seguidas";
 import { SignOutButton } from "@/app/components/auth/sign-out-button";
 import { initialsFromName } from "@/src/data/mockProfiles";
@@ -20,7 +21,8 @@ export type AjustesSection =
   | "tiendas-seguidas"
   | "direcciones"
   | "ayuda"
-  | "soporte";
+  | "soporte"
+  | "acerca";
 
 const AJUSTES_SECTIONS: AjustesSection[] = [
   "perfil",
@@ -30,6 +32,7 @@ const AJUSTES_SECTIONS: AjustesSection[] = [
   "direcciones",
   "ayuda",
   "soporte",
+  "acerca",
 ];
 
 /** Sección activa desde `?tab=` (p. ej. footer → Centro de ayuda). */
@@ -61,6 +64,7 @@ function buildNavGroups(showNegocio: boolean): {
       items: [
         { id: "ayuda", label: "Centro de ayuda" },
         { id: "soporte", label: "Contactar soporte" },
+        { id: "acerca", label: "Acerca de Colex" },
       ],
     },
   ];
@@ -638,6 +642,9 @@ export function AjustesScreen() {
     case "soporte":
       body = <SectionSoporte />;
       break;
+    case "acerca":
+      body = <SectionAcercaDe />;
+      break;
   }
 
   return (
@@ -655,18 +662,6 @@ export function AjustesScreen() {
               narrow
             />
           ))}
-          <Link
-            href="/conocenos"
-            className="shrink-0 rounded-full border border-zinc-200/90 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:border-[#822020]/20 hover:bg-[#822020]/[0.04] sm:text-base"
-          >
-            Conocenos
-          </Link>
-          <Link
-            href="/aurenza"
-            className="shrink-0 rounded-full border border-zinc-200/90 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:border-[#822020]/20 hover:bg-[#822020]/[0.04] sm:text-base"
-          >
-            Aurenza
-          </Link>
         </div>
       </div>
 
@@ -691,20 +686,6 @@ export function AjustesScreen() {
               </div>
             </div>
           ))}
-          <div className="mt-4 space-y-0.5 border-t border-zinc-200 pt-4">
-            <Link
-              href="/conocenos"
-              className="block w-full rounded-lg border border-transparent px-3 py-2.5 text-left text-base text-zinc-800 transition hover:border-[#822020]/10 hover:bg-[#822020]/[0.04] sm:text-lg"
-            >
-              Conocenos
-            </Link>
-            <Link
-              href="/aurenza"
-              className="block w-full rounded-lg border border-transparent px-3 py-2.5 text-left text-base text-zinc-800 transition hover:border-[#822020]/10 hover:bg-[#822020]/[0.04] sm:text-lg"
-            >
-              Aurenza
-            </Link>
-          </div>
         </nav>
       </aside>
 

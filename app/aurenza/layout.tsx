@@ -1,18 +1,12 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { SiteHeader } from "../components/site-header";
 
 export const metadata: Metadata = {
-  title: "Aurenza",
+  title: "Acerca de Colex",
   description:
-    "Creamos soluciones digitales para transformar ideas en productos reales.",
+    "Una plataforma para comprar y vender artículos escolares e institucionales, nuevos o usados.",
 };
 
-export default function AurenzaLayout({ children }: { children: ReactNode }) {
-  return (
-    <div className="min-h-screen bg-black text-white antialiased">
-      <SiteHeader />
-      <main className="mx-auto w-full max-w-[1240px] px-4 py-10 lg:px-6 lg:py-14">{children}</main>
-    </div>
-  );
+export default function AurenzaLegacyLayout({ children }: { children: ReactNode }) {
+  return children;
 }

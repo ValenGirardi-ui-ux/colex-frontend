@@ -103,9 +103,7 @@ export function ComprarCheckoutClient({ product }: ComprarCheckoutClientProps) {
       if (!prefRes.ok || !prefData.initPoint) {
         const msg = prefData.error ?? "No se pudo iniciar el pago con Mercado Pago.";
         if (prefRes.status === 503) {
-          setSubmitError(
-            `${msg} Configurá MERCADOPAGO_ACCESS_TOKEN y SUPABASE_SERVICE_ROLE_KEY en el servidor.`,
-          );
+          setSubmitError(`${msg} Revisá la conexión con Supabase (service role) en el servidor.`);
         } else {
           setSubmitError(msg);
         }

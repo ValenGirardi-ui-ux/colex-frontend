@@ -40,9 +40,13 @@ export function CheckoutMercadoPagoSection({ disabled = false }: CheckoutMercado
 
       {!configured ? (
         <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          Pagos en configuración. Agregá las credenciales TEST de Mercado Pago en el servidor.
+          Pagos en configuración. Agregá las credenciales de Mercado Pago en el servidor.
         </p>
-      ) : null}
+      ) : (
+        <p className="mt-3 text-xs text-zinc-500">
+          Usá una tarjeta de prueba de Mercado Pago. Al volver, confirmamos el pago y registramos tu compra.
+        </p>
+      )}
 
       {disabled ? (
         <p className="mt-3 text-xs text-zinc-500">Completá la entrega para habilitar el pago.</p>

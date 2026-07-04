@@ -95,9 +95,9 @@ export async function createMercadoPagoPreference(
     items,
     external_reference: input.orderId,
     back_urls: {
-      success: `${input.siteOrigin}/comprar/pago/resultado?status=success`,
-      failure: `${input.siteOrigin}/comprar/pago/resultado?status=failure`,
-      pending: `${input.siteOrigin}/comprar/pago/resultado?status=pending`,
+      success: `${input.siteOrigin}/api/mercadopago/return?status=success`,
+      failure: `${input.siteOrigin}/api/mercadopago/return?status=failure`,
+      pending: `${input.siteOrigin}/api/mercadopago/return?status=pending`,
     },
     auto_return: "approved",
     notification_url: notificationUrl,
@@ -128,13 +128,11 @@ export async function createMercadoPagoPreference(
     }
 
     const preferenceId = typeof data.id === "string" ? data.id : null;
+    const prodPoint = typeof data.init_point === "string" ? data.init_point : null;
+    const sandboxPoint = typeof data.sandbox_init_point === "string" ? data.sandbox_init_point : null;
     const initPoint = isMercadoPagoTestMode()
-      ? typeof data.sandbox_init_point === "string"
-        ? data.sandbox_init_point
-        : null
-      : typeof data.init_point === "string"
-        ? data.init_point
-        : null;
+      ? (sandboxPoint ?? prodPoint)
+      : (prodPoint ?? sandboxPoint);
 
     if (!initPoint) {
       return { preferenceId, initPoint: null, error: "Mercado Pago no devolvió URL de pago." };
