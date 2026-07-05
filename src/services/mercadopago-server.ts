@@ -3,6 +3,7 @@ import {
   mercadoPagoAccessToken,
   mercadoPagoWebhookSecret,
 } from "@/src/lib/mercadopago/config";
+import { isLocalSiteOrigin } from "@/src/lib/mercadopago/site-url";
 
 const MP_API = "https://api.mercadopago.com";
 
@@ -94,15 +95,21 @@ export async function createMercadoPagoPreference(
   const body: Record<string, unknown> = {
     items,
     external_reference: input.orderId,
-    back_urls: {
+    statement_descriptor: "COLEX",
+  };
+
+  // MP rechaza localhost en back_urls y muestra "Algo salió mal" / fatal en el redirect.
+  // https://www.mercadopago.com.ar/developers/es/docs/checkout-pro/configure-back-urls
+  const canUseReturnUrls = !isLocalSiteOrigin(input.siteOrigin);
+  if (canUseReturnUrls) {
+    body.back_urls = {
       success: `${input.siteOrigin}/api/mercadopago/return?status=success`,
       failure: `${input.siteOrigin}/api/mercadopago/return?status=failure`,
       pending: `${input.siteOrigin}/api/mercadopago/return?status=pending`,
-    },
-    auto_return: "approved",
-    notification_url: notificationUrl,
-    statement_descriptor: "COLEX",
-  };
+    };
+    body.auto_return = "approved";
+    body.notification_url = notificationUrl;
+  }
 
   // En sandbox, fijar el email del comprador de Colex bloquea el pago si en MP
   // se ingresa con otra cuenta de prueba o tarjeta de test.
