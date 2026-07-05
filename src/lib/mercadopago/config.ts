@@ -18,14 +18,18 @@ export function mercadoPagoSiteUrlFallback(): string | null {
   return fromEnv ? fromEnv.replace(/\/$/, "") : null;
 }
 
-/** Checkout Pro de prueba: usa sandbox_init_point (no init_point de producción). */
+/**
+ * Checkout Pro de prueba: usa sandbox_init_point (no init_point de producción).
+ * Por defecto sandbox mientras las credenciales embebidas sean de prueba.
+ * En producción real: MERCADOPAGO_USE_SANDBOX=false + credenciales de prod en env.
+ */
 export function isMercadoPagoTestMode(): boolean {
   const override = process.env.MERCADOPAGO_USE_SANDBOX?.trim().toLowerCase();
-  if (override === "true" || override === "1") return true;
   if (override === "false" || override === "0") return false;
+  if (override === "true" || override === "1") return true;
   if (mercadoPagoAccessToken().startsWith("TEST-")) return true;
-  // APP_USR del panel de prueba también expone sandbox_init_point; en dev usamos sandbox.
-  return process.env.NODE_ENV !== "production";
+  // APP_USR del panel de prueba: sandbox salvo que se indique lo contrario.
+  return true;
 }
 
 export function isMercadoPagoServerConfigured(): boolean {
