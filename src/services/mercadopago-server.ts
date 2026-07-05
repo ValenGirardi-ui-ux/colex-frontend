@@ -104,7 +104,9 @@ export async function createMercadoPagoPreference(
     statement_descriptor: "COLEX",
   };
 
-  if (input.payerEmail?.trim()) {
+  // En sandbox, fijar el email del comprador de Colex bloquea el pago si en MP
+  // se ingresa con otra cuenta de prueba o tarjeta de test.
+  if (input.payerEmail?.trim() && !isMercadoPagoTestMode()) {
     body.payer = { email: input.payerEmail.trim() };
   }
 
